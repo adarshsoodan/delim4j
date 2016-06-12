@@ -45,13 +45,18 @@ public class Changer extends AnalyzerAdapter {
     }
 
     @Override
+    public void visitEnd() {
+        super.visitEnd(); 
+    }
+
+    @Override
     public void visitInvokeDynamicInsn(String name, String desc, Handle bsm, Object... bsmArgs) {
-        printState();
+        super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs); 
     }
 
     @Override
     public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
-        printState();
+        super.visitMethodInsn(opcode, owner, name, desc, itf); 
     }
 
 }

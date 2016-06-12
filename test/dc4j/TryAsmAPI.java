@@ -8,6 +8,8 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.util.ASMifier;
 import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceClassVisitor;
 
@@ -30,13 +32,17 @@ public class TryAsmAPI {
     }
 
     @Test
-    public void insnState() throws IOException {
-        final Changer marker = new Changer();
+    public void insnState() throws Exception {
+        if (Math.random() < 0.5) {
+            ClassReader reader = new ClassReader(this.getClass().getCanonicalName());
 
-        ClassReader reader = new ClassReader(this.getClass().getCanonicalName());
-        reader.accept(marker, ClassReader.EXPAND_FRAMES);
- 
-        TraceClassVisitor tracer = new TraceClassVisitor(null, new Textifier(), new PrintWriter(System.out));
-        marker.accept(tracer);
+            TraceClassVisitor tracer = new TraceClassVisitor(null, new ASMifier(), new PrintWriter(System.out));
+            reader.accept(tracer, 0);
+        } else {
+            ClassReader reader = new ClassReader(this.getClass().getCanonicalName());
+
+            TraceClassVisitor tracer = new TraceClassVisitor(null, new ASMifier(), new PrintWriter(System.out));
+            reader.accept(tracer, 0);
+        }
     }
 }
