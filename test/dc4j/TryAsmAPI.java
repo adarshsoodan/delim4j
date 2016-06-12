@@ -31,7 +31,7 @@ public class TryAsmAPI {
 
     @Test
     public void insnState() throws IOException {
-        final Marker marker = new Marker();
+        final Changer marker = new Changer();
 
         ClassReader reader = new ClassReader(this.getClass().getCanonicalName());
         reader.accept(marker, ClassReader.EXPAND_FRAMES);
