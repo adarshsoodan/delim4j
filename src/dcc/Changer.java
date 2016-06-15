@@ -1,4 +1,4 @@
-package dc4j;
+package dcc;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,30 +51,11 @@ public class Changer extends AnalyzerAdapter {
         if ((access & Opcodes.ACC_STATIC) == 0) {
             frame0.add(owner);
         }
-        final Type[] types = Type.getArgumentTypes(desc);
-        for (final Type t : types) {
-            switch (t.getSort()) {
-                case Type.INT:
-                case Type.BOOLEAN:
-                case Type.BYTE:
-                case Type.CHAR:
-                    frame0.add(Opcodes.INTEGER);
-                    break;
-                case Type.FLOAT:
-                    frame0.add(Opcodes.FLOAT);
-                    break;
-                case Type.LONG:
-                    frame0.add(Opcodes.LONG);
-                    frame0.add(Opcodes.TOP);
-                    break;
-                case Type.DOUBLE:
-                    frame0.add(Opcodes.DOUBLE);
-                    frame0.add(Opcodes.TOP);
-                    break;
-                case Type.ARRAY:
-                case Type.OBJECT:
-                    frame0.add(t.getDescriptor());
-                    break;
+        for (final Type t : Type.getArgumentTypes(desc)) {
+            Object f = FrameT.fromType(t);
+            frame0.add(f);
+            if (f.equals(Opcodes.LONG) || f.equals(Opcodes.DOUBLE)) {
+                frame0.add(Opcodes.TOP);
             }
         }
     }
@@ -114,24 +95,13 @@ public class Changer extends AnalyzerAdapter {
         super.visitJumpInsn(Opcodes.GOTO, start);
         super.visitLabel(start);
         // TODO Are local vars extendable without changing previous frame?
+        // TODO What is the order of stack vars?
         super.visitFrame(Opcodes.F_NEW, callLocals.size(),
                 callLocals.toArray(), callStack.size(), callStack.toArray());
         for (int i = 0; i < callStack.size(); ++i) {
-            Object t = callStack.get(i);
-            // typeof t is Integer, String or Label
-            // TODO BiConvert between frame types and Type.
-            if (t.equals(Opcodes.INTEGER)) {
-
-            } else if (t.equals(Opcodes.FLOAT)) {
-
-            } else if (t.equals(Opcodes.LONG)) {
-
-            } else if (t.equals(Opcodes.DOUBLE)) {
-
-            } else if (t instanceof String) {
-
-            } else if (t instanceof Label) {
-
+            Type t = FrameT.fromFrame(callStack.get(i));
+            if(t != null) {
+                super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), numLocals + i);
             }
         }
 

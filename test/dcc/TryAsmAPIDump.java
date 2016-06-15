@@ -1,4 +1,4 @@
-package dc4j;
+package dcc;
 
 import org.objectweb.asm.*;
 

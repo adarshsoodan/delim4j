@@ -1,4 +1,4 @@
-package dc4j;
+package dcc;
 
 import java.io.PrintWriter;
 import static java.lang.System.out;
