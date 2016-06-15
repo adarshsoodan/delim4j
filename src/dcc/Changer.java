@@ -43,22 +43,14 @@ tableswitch  -> insert label cc-tableswitch
 public class Changer extends AnalyzerAdapter {
 
     public static final String dccException = "Ldcc/rt/DccException;";
+    
     List<Object> frame0 = new ArrayList<>();
     Label ccTableSwitch = new Label();
     Label frame1Label = new Label();
 
     public Changer(int api, String owner, int access, String name, String desc, MethodVisitor mv) {
         super(api, owner, access, name, desc, mv);
-        if ((access & Opcodes.ACC_STATIC) == 0) {
-            frame0.add(owner);
-        }
-        for (final Type t : Type.getArgumentTypes(desc)) {
-            Object f = FrameT.fromType(t);
-            frame0.add(f);
-            if (f.equals(Opcodes.LONG) || f.equals(Opcodes.DOUBLE)) {
-                frame0.add(Opcodes.TOP);
-            }
-        }
+        frame0.addAll(locals);
     }
 
     @Override
@@ -73,8 +65,8 @@ public class Changer extends AnalyzerAdapter {
     public void visitInvokeDynamicInsn(String name, String desc, Handle bsm, Object... bsmArgs) {
         final int numLocals = locals.size();
         final List<Object> callLocals = new ArrayList<>(locals);
-        final List<Object> callStack = new ArrayList<>(stack);
         callLocals.addAll(stack);
+        final List<Object> callStack = new ArrayList<>(stack);
 
         final Label start = new Label();
         final Label end = new Label();
