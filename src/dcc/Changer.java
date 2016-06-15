@@ -42,6 +42,7 @@ tableswitch  -> insert label cc-tableswitch
  */
 public class Changer extends AnalyzerAdapter {
 
+    public static final String dccException = "Ldcc/rt/DccException;";
     List<Object> frame0 = new ArrayList<>();
     Label ccTableSwitch = new Label();
     Label frame1Label = new Label();
@@ -69,63 +70,86 @@ public class Changer extends AnalyzerAdapter {
     }
 
     @Override
-    public void visitEnd() {
-        super.visitEnd();
-    }
-
-    @Override
     public void visitInvokeDynamicInsn(String name, String desc, Handle bsm, Object... bsmArgs) {
-        /*
-           Visit calls  -> retrieve stack-var-types and count
-                Append count local-var-types with stack-var-types vals
-                create start-call-label
-                insert goto start-call-label
-                insert start-call-label
-                insert call-frame-map with new local-var-types and same stack-var-types
-                pop corresponding stack-vars and store in local-vars
-                push stack-vars in same order from local-vars
-                create and insert end-call-label
-         */
         final int numLocals = locals.size();
         final List<Object> callLocals = new ArrayList<>(locals);
         final List<Object> callStack = new ArrayList<>(stack);
         callLocals.addAll(stack);
 
         final Label start = new Label();
+        final Label end = new Label();
+        final Label handler = new Label();
+        super.visitTryCatchBlock(start, end, handler, dccException);
+
         super.visitJumpInsn(Opcodes.GOTO, start);
         super.visitLabel(start);
         // TODO Are local vars extendable without changing previous frame?
         // TODO What is the order of stack vars?
         super.visitFrame(Opcodes.F_NEW, callLocals.size(),
                 callLocals.toArray(), callStack.size(), callStack.toArray());
+        final List<Type> stackTypes
+                = callStack.stream().map(FrameT::fromFrame).collect(Collectors.toList());
+
+        // POPs to localvars.
         for (int i = 0; i < callStack.size(); ++i) {
-            Type t = FrameT.fromFrame(callStack.get(i));
-            if(t != null) {
+            Type t = stackTypes.get(i);
+            if (t != null) {
                 super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), numLocals + i);
             }
         }
-
+        // PUSHs same values from local vars in reverse order.
+        for (int i = callStack.size() - 1; i >= 0; --i) {
+            Type t = stackTypes.get(i);
+            if (t != null) {
+                super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), numLocals + i);
+            }
+        }
         super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs);
-//         super.visitTryCatchBlock(Label start,
-//                               Label end,
-//                               Label handler,
-//                               String type);
+        super.visitLabel(end);
+
+        super.visitLabel(handler);
+        super.visitFrame(Opcodes.F_NEW, callLocals.size(),
+                callLocals.toArray(), 1, new Object[]{dccException});
+        // TODO ... create code ...
+
+        super.visitInsn(Opcodes.ATHROW);
     }
 
     @Override
     public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
         super.visitMethodInsn(opcode, owner, name, desc, itf);
-//         super.visitTryCatchBlock(Label start,
-//                               Label end,
-//                               Label handler,
-//                               String type);
     }
 
-    void printState() {
-        locals.stream().map(x -> x.toString()).collect(Collectors.joining(", "));
-        stack.stream().map(x -> x.toString()).collect(Collectors.joining(", "));
-    }
+    @Override
+    public void visitMaxs(int maxStack, int maxLocals) {
+        /*
+        tableswitch  -> insert label cc-tableswitch
+                insert frame-0-map
+                create a switch over pos
+                ... each-pos -> Retrieve local-vars
+                                push stack-vars in same order from local-vars
+                                goto start-call-label
 
+         */
+        super.visitLabel(ccTableSwitch);
+        super.visitFrame(Opcodes.F_NEW, frame0.size(), frame0.toArray(), 0, new Object[]{});
+        /*
+        public void visitTableSwitchInsn(int min,
+                                 int max,
+                                 Label dflt,
+                                 Label... labels)
+
+         Visits a TABLESWITCH instruction.
+
+         Parameters:
+            min - the minimum key value.
+            max - the maximum key value.
+            dflt - beginning of the default handler block.
+            labels - beginnings of the handler blocks.
+                     labels[i] is the beginning of the handler block for the min + i key. 
+         */
+        super.visitMaxs(maxStack, maxLocals);
+    }
 }
 
 /* Primitive types are represented by Opcodes.TOP, Opcodes.INTEGER
@@ -133,8 +157,8 @@ public class Changer extends AnalyzerAdapter {
    or Opcodes.UNINITIALIZED_THIS (long and double are represented by a single element).
    Reference types are represented by String objects (representing internal names)
  */
-
- /*
+//  visitTryCatchBlock must be called before the labels passed as arguments have been visited
+/*
     int ACC_PUBLIC = 0x0001; // class, field, method
     int ACC_PRIVATE = 0x0002; // class, field, method
     int ACC_PROTECTED = 0x0004; // class, field, method
