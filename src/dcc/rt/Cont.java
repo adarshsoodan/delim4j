@@ -6,39 +6,95 @@ import java.util.function.Function;
 
 public class Cont implements Cloneable {
 
-    private Function<Object, Object> f;
-    
-//    private final List<int> ints;
-//    private final List<float> floats;
-//    private final List<long> longs;
-//    private final List<double> doubles;
-    private final List<Object> objects;
+    Function<Object, Object> f;
 
-    private int posInt;
-    private int posFloat;
-    private int posLong;
-    private int posDouble;
-    private int posObject;
+//    final List<int> jumps;
+//    final List<int> ints;
+//    final List<float> floats;
+//    final List<long> longs;
+//    final List<double> doubles;
+    final List<Object> objects;
+
+    int posJump;
+
+    int posInt;
+    int posFloat;
+    int posLong;
+    int posDouble;
+    int posObject;
 
     public Cont(final Function<Object, Object> f) {
         this.f = f;
-        posInt = posFloat = posLong = posDouble = posObject = 0;
+        posJump = posInt = posFloat = posLong = posDouble = posObject = 0;
         objects = new ArrayList<>();
     }
 
-    public Object popObject() {
+    final public int popJump() {
+        --posJump;
+        return -1;
+    }
+
+    final public void pushJump(final int jump) {
+        // jumps.add(jump);
+        ++posJump;
+    }
+
+    final public int popInt() {
+        --posInt;
+        return -1;
+    }
+
+    final public void pushInt(final int x) {
+        // ints.add(x);
+        ++posInt;
+    }
+
+    final public float popFloat() {
+        --posFloat;
+        return -1.0f;
+    }
+
+    final public void pushFloat(final float x) {
+        // floats.add(x);
+        ++posFloat;
+    }
+
+    final public long popLong() {
+        --posLong;
+        return -1L;
+    }
+
+    final public void pushLong(final long x) {
+        // longs.add(x);
+        ++posLong;
+    }
+
+    final public double popDouble() {
+        --posDouble;
+        return -1.0;
+    }
+
+    final public void pushDouble(final double x) {
+        // doubles.add(x);
+        ++posDouble;
+    }
+
+    final public Object popObject() {
         --posObject;
         final Object ret = objects.get(posObject);
         return ret;
     }
 
-    public void pushObject(final Object o) {
+    final public void pushObject(final Object o) {
         objects.add(o);
         ++posObject;
     }
 
+    final void invalidCont() {
+        throw new RuntimeException("This is an invalid Cont - " + this);
+    }
     @Override
-    public Object clone() throws CloneNotSupportedException {
+    final public Object clone() throws CloneNotSupportedException {
         return super.clone();
     }
 }

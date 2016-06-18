@@ -2,9 +2,12 @@ package dcc;
 
 import dcc.rt.Cont;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
@@ -49,19 +52,29 @@ public class Changer extends AnalyzerAdapter {
 
     List<Object> frame0 = new ArrayList<>();
     Label ccTableSwitch = new Label();
-    List<Type[]> jumpStacks = new ArrayList<>();
     List<Label> jumpLabels = new ArrayList<>();
+    List<Type[]> jumpStacks = new ArrayList<>();
+    List<Type[]> jumpLocals = new ArrayList<>();
     boolean hasThis;
-    final Method popJump;
+
+    static AtomicBoolean contFieldsLoaded = new AtomicBoolean(false);
+    Map<String, Method> contFields = new HashMap<>();
 
     public Changer(int api, String owner, int access, String name, String desc, MethodVisitor mv) {
         super(api, owner, access, name, desc, mv);
         frame0.addAll(locals);
         hasThis = ((access & Opcodes.ACC_STATIC) == 0);
-        try {
-            popJump = Method.getMethod(Cont.class.getMethod("popJump"));
-        } catch (NoSuchMethodException | SecurityException ex) {
-            throw new RuntimeException(ex);
+        if (contFieldsLoaded.get() == false) {
+            Stream.of("popJump", "popInt", "popFLoat", "popLong", "popDouble", "popObject",
+                    "invalidCont")
+                    .forEach(s -> {
+                        try {
+                            contFields.put(s, Method.getMethod(Cont.class.getMethod(s)));
+                        } catch (NoSuchMethodException | SecurityException ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    });
+            contFieldsLoaded.set(true);
         }
     }
 
@@ -92,12 +105,14 @@ public class Changer extends AnalyzerAdapter {
 
         super.visitJumpInsn(Opcodes.GOTO, start);
         super.visitLabel(start);
-        // TODO What is the order of stack vars?
+        // TODO Order of stack
         super.visitFrame(Opcodes.F_NEW, callLocals.size(),
                 callLocals.toArray(), callStack.size(), callStack.toArray());
 
+        final Type[] localTypes = FrameT.fromFrame(callLocals);
         final Type[] stackTypes = FrameT.fromFrame(callStack);
         jumpLabels.add(start);
+        jumpLocals.add(localTypes);
         jumpStacks.add(stackTypes);
 
         // POPs to localvars.
@@ -107,7 +122,7 @@ public class Changer extends AnalyzerAdapter {
                 super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), numLocals + i);
             }
         }
-        // PUSHs to local vars in reverse order.
+        // PUSHs from local vars in reverse order.
         for (int i = callStack.size() - 1; i >= 0; --i) {
             Type t = stackTypes[i];
             if (t != null) {
@@ -121,6 +136,8 @@ public class Changer extends AnalyzerAdapter {
         super.visitFrame(Opcodes.F_NEW, callLocals.size(),
                 callLocals.toArray(), 1, new Object[]{dccException});
         // TODO ... create code ...
+        // TODO Order of stack
+        // TODO Order of local vars
 
         super.visitInsn(Opcodes.ATHROW);
     }
@@ -132,52 +149,80 @@ public class Changer extends AnalyzerAdapter {
 
     @Override
     public void visitMaxs(int maxStack, int maxLocals) {
-        /*
-        TODO tableswitch  -> insert label cc-tableswitch
-                insert frame-0-map
-                create a switch over pos
-                ... each-pos -> Retrieve local-vars
-                                push stack-vars in same order from local-vars
-                                goto start-call-label
-
-         */
         super.visitLabel(ccTableSwitch);
         super.visitFrame(Opcodes.F_NEW, frame0.size(), frame0.toArray(), 0, new Object[]{});
-        super.visitVarInsn(Opcodes.ALOAD, (hasThis ? 1 : 0));
-        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
-                "Ldcc/rt/Cont;", popJump.getName(), popJump.getDescriptor(), false);
+        int contVar = (hasThis ? 1 : 0);
 
         Label defaultLabel = new Label();
-        super.visitTableSwitchInsn(0, jumpLabels.size() - 1, defaultLabel,
-                jumpLabels.toArray(new Label[]{}));
-        for (Type[] ts : jumpStacks) {
-            for (Type t : ts) {
-                switch (t.getSort()) {
+        Label[] tableLabels = new Label[jumpLabels.size()];
+        IntStream.range(0, tableLabels.length).forEach(i -> tableLabels[i] = new Label());
 
+        super.visitVarInsn(Opcodes.ALOAD, contVar);
+        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                "Ldcc/rt/Cont;", contFields.get("popJump").getName(),
+                contFields.get("popJump").getDescriptor(), false);
+        super.visitTableSwitchInsn(0, tableLabels.length - 1, defaultLabel, tableLabels);
+        for (int i = 0; i < tableLabels.length; i++) {
+            super.visitLabel(tableLabels[i]);
+            Label start = jumpLabels.get(i);
+            Type[] jumpStack = jumpStacks.get(i);
+            Type[] jumpVars = jumpLocals.get(i);
+            // TODO Order of stack
+            for (Type t : jumpStack) {
+                if (t != null) {
+                    Method m = getPopMethod(t.getSort());
+                    super.visitVarInsn(Opcodes.ALOAD, contVar);
+                    super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                            "Ldcc/rt/Cont;", m.getName(), m.getDescriptor(), false);
                 }
             }
+            // TODO Order of local vars
+            IntStream.range(0, jumpVars.length).forEach(j -> {
+                Type t = jumpVars[j];
+                if (t != null) {
+                    Method m = getPopMethod(t.getSort());
+                    super.visitVarInsn(Opcodes.ALOAD, contVar);
+                    super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                            "Ldcc/rt/Cont;", m.getName(), m.getDescriptor(), false);
+                    super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), j + contVar);
+                }
+            });
+            super.visitJumpInsn(Opcodes.GOTO, start);
         }
-        /*
-        public void visitTableSwitchInsn(int min,
-                                 int max,
-                                 Label dflt,
-                                 Label... labels)
 
-         Visits a TABLESWITCH instruction.
+        super.visitLabel(defaultLabel);
 
-         Parameters:
-            min - the minimum key value.
-            max - the maximum key value.
-            dflt - beginning of the default handler block.
-            labels - beginnings of the handler blocks.
-                     labels[i] is the beginning of the handler block for the min + i key. 
-         */
+        super.visitVarInsn(Opcodes.ALOAD, contVar);
+
+        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                "Ldcc/rt/Cont;", contFields.get("invalidCont").getName(),
+                contFields.get("invalidCont").getDescriptor(), false);
+
         super.visitMaxs(maxStack, maxLocals);
+    }
+
+    Method getPopMethod(int sort) {
+        switch (sort) {
+            case Type.INT:
+                return contFields.get("popInt");
+            case Type.FLOAT:
+                return contFields.get("popFloat");
+            case Type.LONG:
+                return contFields.get("popLong");
+            case Type.DOUBLE:
+                return contFields.get("popDouble");
+            case Type.OBJECT:
+            case Type.ARRAY:
+                return contFields.get("popObject");
+            default:
+                throw new RuntimeException("Unknown Sort -> " + sort);
+        }
+
     }
 }
 
 /* Primitive types are represented by Opcodes.TOP, Opcodes.INTEGER
-   , Opcodes.FLOAT, Opcodes.LONG, Opcodes.DOUBLE,Opcodes.NULL
+   , Opcodes.FLOAT, Opcodes.LONG, Opcodes.DOUBLE, Opcodes.NULL
    or Opcodes.UNINITIALIZED_THIS (long and double are represented by a single element).
    Reference types are represented by String objects (representing internal names)
  */

@@ -1,5 +1,6 @@
 package dcc;
 
+import java.util.List;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
@@ -22,4 +23,13 @@ public class FrameT {
             throw new RuntimeException("Unknown or uninitialized type" + f);
         }
     }
+
+    public static Type[] fromFrame(List<Object> fs) {
+        Type[] ret = new Type[fs.size()];
+        for(int i = 0; i < ret.length; ++i) {
+            ret[i] = fromFrame(fs.get(i));
+        }
+        return ret;
+    }
+
 }
