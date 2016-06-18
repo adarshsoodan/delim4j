@@ -1,14 +1,17 @@
 package dcc;
 
+import dcc.rt.Cont;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.AnalyzerAdapter;
+import org.objectweb.asm.commons.Method;
 
 /*
 All frames are in expanded form(i.e. F_NEW) due to requirement of AnalyzerAdapter.
@@ -43,29 +46,43 @@ tableswitch  -> insert label cc-tableswitch
 public class Changer extends AnalyzerAdapter {
 
     public static final String dccException = "Ldcc/rt/DccException;";
-    
+
     List<Object> frame0 = new ArrayList<>();
     Label ccTableSwitch = new Label();
-    Label frame1Label = new Label();
+    List<Type[]> jumpStacks = new ArrayList<>();
+    List<Label> jumpLabels = new ArrayList<>();
+    boolean hasThis;
+    final Method popJump;
 
     public Changer(int api, String owner, int access, String name, String desc, MethodVisitor mv) {
         super(api, owner, access, name, desc, mv);
         frame0.addAll(locals);
+        hasThis = ((access & Opcodes.ACC_STATIC) == 0);
+        try {
+            popJump = Method.getMethod(Cont.class.getMethod("popJump"));
+        } catch (NoSuchMethodException | SecurityException ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     @Override
     public void visitCode() {
         super.visitCode();
         super.visitJumpInsn(Opcodes.GOTO, ccTableSwitch);
+        Label frame1Label = new Label();
         super.visitLabel(frame1Label);
         super.visitFrame(Opcodes.F_NEW, frame0.size(), frame0.toArray(), 0, new Object[]{});
+
+        jumpLabels.add(frame1Label);
+        jumpStacks.add(new Type[]{});
     }
 
     @Override
     public void visitInvokeDynamicInsn(String name, String desc, Handle bsm, Object... bsmArgs) {
         final int numLocals = locals.size();
         final List<Object> callLocals = new ArrayList<>(locals);
-        callLocals.addAll(stack);
+        // callLocals.addAll(stack);         // TODO Is extension of local vars needed?
+        // TODO Are local vars extendable without changing previous frame?
         final List<Object> callStack = new ArrayList<>(stack);
 
         final Label start = new Label();
@@ -75,23 +92,24 @@ public class Changer extends AnalyzerAdapter {
 
         super.visitJumpInsn(Opcodes.GOTO, start);
         super.visitLabel(start);
-        // TODO Are local vars extendable without changing previous frame?
         // TODO What is the order of stack vars?
         super.visitFrame(Opcodes.F_NEW, callLocals.size(),
                 callLocals.toArray(), callStack.size(), callStack.toArray());
-        final List<Type> stackTypes
-                = callStack.stream().map(FrameT::fromFrame).collect(Collectors.toList());
+
+        final Type[] stackTypes = FrameT.fromFrame(callStack);
+        jumpLabels.add(start);
+        jumpStacks.add(stackTypes);
 
         // POPs to localvars.
         for (int i = 0; i < callStack.size(); ++i) {
-            Type t = stackTypes.get(i);
+            Type t = stackTypes[i];
             if (t != null) {
                 super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), numLocals + i);
             }
         }
-        // PUSHs same values from local vars in reverse order.
+        // PUSHs to local vars in reverse order.
         for (int i = callStack.size() - 1; i >= 0; --i) {
-            Type t = stackTypes.get(i);
+            Type t = stackTypes[i];
             if (t != null) {
                 super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), numLocals + i);
             }
@@ -115,7 +133,7 @@ public class Changer extends AnalyzerAdapter {
     @Override
     public void visitMaxs(int maxStack, int maxLocals) {
         /*
-        tableswitch  -> insert label cc-tableswitch
+        TODO tableswitch  -> insert label cc-tableswitch
                 insert frame-0-map
                 create a switch over pos
                 ... each-pos -> Retrieve local-vars
@@ -125,6 +143,20 @@ public class Changer extends AnalyzerAdapter {
          */
         super.visitLabel(ccTableSwitch);
         super.visitFrame(Opcodes.F_NEW, frame0.size(), frame0.toArray(), 0, new Object[]{});
+        super.visitVarInsn(Opcodes.ALOAD, (hasThis ? 1 : 0));
+        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                "Ldcc/rt/Cont;", popJump.getName(), popJump.getDescriptor(), false);
+
+        Label defaultLabel = new Label();
+        super.visitTableSwitchInsn(0, jumpLabels.size() - 1, defaultLabel,
+                jumpLabels.toArray(new Label[]{}));
+        for (Type[] ts : jumpStacks) {
+            for (Type t : ts) {
+                switch (t.getSort()) {
+
+                }
+            }
+        }
         /*
         public void visitTableSwitchInsn(int min,
                                  int max,
@@ -150,24 +182,3 @@ public class Changer extends AnalyzerAdapter {
    Reference types are represented by String objects (representing internal names)
  */
 //  visitTryCatchBlock must be called before the labels passed as arguments have been visited
-/*
-    int ACC_PUBLIC = 0x0001; // class, field, method
-    int ACC_PRIVATE = 0x0002; // class, field, method
-    int ACC_PROTECTED = 0x0004; // class, field, method
-    int ACC_STATIC = 0x0008; // field, method
-    int ACC_FINAL = 0x0010; // class, field, method, parameter
-    int ACC_SUPER = 0x0020; // class
-    int ACC_SYNCHRONIZED = 0x0020; // method
-    int ACC_VOLATILE = 0x0040; // field
-    int ACC_BRIDGE = 0x0040; // method
-    int ACC_VARARGS = 0x0080; // method
-    int ACC_TRANSIENT = 0x0080; // field
-    int ACC_NATIVE = 0x0100; // method
-    int ACC_INTERFACE = 0x0200; // class
-    int ACC_ABSTRACT = 0x0400; // class, method
-    int ACC_STRICT = 0x0800; // method
-    int ACC_SYNTHETIC = 0x1000; // class, field, method, parameter
-    int ACC_ANNOTATION = 0x2000; // class
-    int ACC_ENUM = 0x4000; // class(?) field inner
-    int ACC_MANDATED = 0x8000; // parameter
- */
