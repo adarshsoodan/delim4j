@@ -9,6 +9,7 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.Method;
+import org.objectweb.asm.util.ASMifier;
 import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceClassVisitor;
 
@@ -16,6 +17,8 @@ public class TryAsmAPI {
 
     @Test
     public void argTypes() throws Exception {
+        String s = Integer.toString(123491);
+        assert s != null;
         final Method method = Method.getMethod(
                 String.class.getMethod("format", String.class, (new Object[]{}).getClass()));
         final Type[] types = Type.getArgumentTypes(method.getDescriptor());
@@ -59,12 +62,12 @@ public class TryAsmAPI {
         if (Math.random() < 0.5) {
             ClassReader reader = new ClassReader(className);
 
-            TraceClassVisitor tracer = new TraceClassVisitor(null, new Textifier(), printer);
+            TraceClassVisitor tracer = new TraceClassVisitor(null, new ASMifier(), printer);
             reader.accept(tracer, 0);
         } else {
             ClassReader reader = new ClassReader(className);
 
-            TraceClassVisitor tracer = new TraceClassVisitor(null, new Textifier(), printer);
+            TraceClassVisitor tracer = new TraceClassVisitor(null, new ASMifier(), printer);
             reader.accept(tracer, 0);
         }
     }
