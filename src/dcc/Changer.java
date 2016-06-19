@@ -53,6 +53,7 @@ public class Changer extends AnalyzerAdapter {
     static String contDesc = "dcc/rt/Cont";
 
     List<Object> frame0 = new ArrayList<>();
+    Label frame1 = new Label();
     Label ccTableSwitch = new Label();
 
     List<CallWrapInfo> callWrapInfo = new ArrayList<>();
@@ -85,12 +86,8 @@ public class Changer extends AnalyzerAdapter {
     public void visitCode() {
         super.visitCode();
         super.visitJumpInsn(Opcodes.GOTO, ccTableSwitch);
-        Label frame1Label = new Label();
-        super.visitLabel(frame1Label);
+        super.visitLabel(frame1);
         super.visitFrame(Opcodes.F_NEW, frame0.size(), frame0.toArray(), 0, new Object[]{});
-
-        Type[] localTypes = FrameT.fromFrame(frame0);
-        callWrapInfo.add(new CallWrapInfo(frame1Label, new Type[]{}, localTypes, null, null));
     }
 
     void visitCall(Runnable action) {
@@ -158,7 +155,10 @@ public class Changer extends AnalyzerAdapter {
         super.visitLabel(ccTableSwitch);
         super.visitFrame(Opcodes.F_NEW, frame0.size(), frame0.toArray(), 0, new Object[]{});
         int contVar = (hasThis ? 1 : 0);
-
+        super.visitVarInsn(Opcodes.ALOAD, contVar);
+        super.visitJumpInsn(Opcodes.IFNULL, frame1);
+        // TODO super.visitFrame(Opcodes.F_NEW, frame0.size(), frame0.toArray(), 0, new Object[]{});
+        // TODO Type[] localTypes = FrameT.fromFrame(frame0);
         Label defaultLabel = new Label();
         Label[] tableLabels = new Label[callWrapInfo.size()];
         IntStream.range(0, tableLabels.length).forEach(i -> tableLabels[i] = new Label());

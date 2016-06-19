@@ -13,7 +13,7 @@ public class Cont implements Cloneable {
 //    final List<float> floats;
 //    final List<long> longs;
 //    final List<double> doubles;
-    final List<Object> objects;
+    List<Object> objects;
 
     int posJump;
 
@@ -93,6 +93,7 @@ public class Cont implements Cloneable {
     final void invalidCont() {
         throw new RuntimeException("This is an invalid Cont - " + this);
     }
+
     @Override
     final public Object clone() throws CloneNotSupportedException {
         return super.clone();
