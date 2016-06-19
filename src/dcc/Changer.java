@@ -174,6 +174,7 @@ public class Changer extends AnalyzerAdapter {
             }
         }
         super.visitInsn(Opcodes.DUP);
+        super.visitLdcInsn(jumpLabels.size() - 1);
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,
                 contFields.get("pushJump").getName(),
                 contFields.get("pushJump").getDescriptor(), false);
