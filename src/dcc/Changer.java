@@ -17,6 +17,7 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.AnalyzerAdapter;
 import org.objectweb.asm.commons.Method;
 
+// TODO If any call has unintialized value in localvars or stack, do not wrap the call.
 /*
 All frames are in expanded form(i.e. F_NEW) due to requirement of AnalyzerAdapter.
 

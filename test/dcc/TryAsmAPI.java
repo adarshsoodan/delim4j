@@ -1,91 +1,55 @@
 package dcc;
 
+import java.io.FileInputStream;
 import java.io.PrintWriter;
-import static java.lang.System.out;
-import java.util.ArrayList;
-import java.util.List;
 import org.junit.Test;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.Type;
-import org.objectweb.asm.commons.Method;
-import org.objectweb.asm.util.ASMifier;
+import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceClassVisitor;
 
 public class TryAsmAPI {
 
+    static String sampleClass = "C:\\Users\\user\\Desktop\\workspaces\\tmp\\dcc\\TryAsmAPI.class";
+
     @Test
     public void verifyNonCont() throws Exception {
         final String className = TryAsmAPI.class.getCanonicalName();
-        final PrintWriter printer = new PrintWriter(System.out);
-        ClassReader reader = new ClassReader(className);
-        ClassVisitor cv = new ClassVisitor(Opcodes.ASM5) {
+        ClassWriter cw = new ClassWriter(0);
+        ClassVisitor cv = new ClassVisitor(Opcodes.ASM5, cw) {
             @Override
             public MethodVisitor visitMethod(int access, String name, String desc, String signature,
                     String[] exceptions) {
-                return new Changer(name, access, name, desc,
-                        super.visitMethod(access, name, desc, signature, exceptions));
+                if ("<init>".equals(name) || "<clinit>".equals(name)) {
+                    return super.visitMethod(access, name, desc, signature, exceptions);
+                } else {
+                    return new Changer("dcc/TryAsmAPI", access, name, desc,
+                            super.visitMethod(access, name, desc, signature, exceptions));
+                }
             }
-
         };
-        TraceClassVisitor tracer = new TraceClassVisitor(null, new ASMifier(), printer);
-        reader.accept(tracer, 0);
-    }
-
-    @Test
-    public void argTypes() throws Exception {
-        final Method method = Method.getMethod(
-                String.class.getMethod("format", String.class, (new Object[]{}).getClass()));
-        final Type[] types = Type.getArgumentTypes(method.getDescriptor());
-        /* Primitive types are represented by Opcodes.TOP, Opcodes.INTEGER
-           , Opcodes.FLOAT, Opcodes.LONG, Opcodes.DOUBLE,Opcodes.NULL
-           or Opcodes.UNINITIALIZED_THIS (long and double are represented by a single element).
-          Reference types are represented by String objects (representing internal names)*/
-        List<Object> l = new ArrayList<>();
-        for (final Type t : types) {
-            switch (t.getSort()) {
-                case Type.INT:
-                case Type.BOOLEAN:
-                case Type.BYTE:
-                case Type.CHAR:
-                    l.add(Opcodes.INTEGER);
-                    break;
-                case Type.FLOAT:
-                    l.add(Opcodes.FLOAT);
-                    break;
-                case Type.LONG:
-                    l.add(Opcodes.LONG);
-                    l.add(Opcodes.TOP);
-                    break;
-                case Type.DOUBLE:
-                    l.add(Opcodes.DOUBLE);
-                    l.add(Opcodes.TOP);
-                    break;
-                case Type.ARRAY:
-                case Type.OBJECT:
-                    l.add(t.getDescriptor());
-                    break;
-            }
+        {
+            ClassReader reader = new ClassReader(className);
+            reader.accept(cv, ClassReader.EXPAND_FRAMES);
         }
-        l.forEach(x -> out.println(x));
+        {
+            byte[] b = cw.toByteArray();
+            ClassReader reader = new ClassReader(b);
+            PrintWriter printer = new PrintWriter(System.out);
+            TraceClassVisitor tracer = new TraceClassVisitor(null, new Textifier(), printer);
+            reader.accept(tracer, ClassReader.EXPAND_FRAMES | ClassReader.SKIP_DEBUG);
+        }
     }
 
     @Test
     public void insnState() throws Exception {
-        final String className = TryAsmAPI.class.getCanonicalName();
-        final PrintWriter printer = new PrintWriter(System.out);
-        if (Math.random() < 0.5) {
-            ClassReader reader = new ClassReader(className);
+        PrintWriter printer = new PrintWriter(System.out);
+        ClassReader reader = new ClassReader(new FileInputStream(sampleClass));
 
-            TraceClassVisitor tracer = new TraceClassVisitor(null, new ASMifier(), printer);
-            reader.accept(tracer, 0);
-        } else {
-            ClassReader reader = new ClassReader(className);
-
-            TraceClassVisitor tracer = new TraceClassVisitor(null, new ASMifier(), printer);
-            reader.accept(tracer, 0);
-        }
+        TraceClassVisitor tracer = new TraceClassVisitor(null, new Textifier(), printer);
+        reader.accept(tracer, ClassReader.EXPAND_FRAMES | ClassReader.SKIP_DEBUG);
     }
 }
