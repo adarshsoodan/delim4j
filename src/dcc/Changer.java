@@ -49,8 +49,8 @@ tableswitch  -> insert label cc-tableswitch
  */
 public class Changer extends AnalyzerAdapter {
 
-    public static final String dccException = "Ldcc/rt/DccException;";
-    public static final String contDesc = "Ldcc/rt/Cont;";
+    static String dccException = "dcc/rt/DccException";
+    static String contDesc = "dcc/rt/Cont";
 
     List<Object> frame0 = new ArrayList<>();
     Label ccTableSwitch = new Label();
@@ -60,12 +60,12 @@ public class Changer extends AnalyzerAdapter {
     boolean hasThis;
 
     static AtomicBoolean methodsLoaded = new AtomicBoolean(false);
-    Map<String, Method> contFields = new HashMap<>();
-    Method getCont;
-    Method initException;
+    static Map<String, Method> contFields = new HashMap<>();
+    static Method getCont;
+    static Method initException;
 
-    public Changer(int api, String owner, int access, String name, String desc, MethodVisitor mv) {
-        super(api, owner, access, name, desc, mv);
+    public Changer(String owner, int access, String name, String desc, MethodVisitor mv) {
+        super(Opcodes.ASM5, owner, access, name, desc, mv);
         frame0.addAll(locals);
         hasThis = ((access & Opcodes.ACC_STATIC) == 0);
         if (methodsLoaded.get() == false) {
@@ -99,15 +99,16 @@ public class Changer extends AnalyzerAdapter {
 
         jumpLabels.add(frame1Label);
         jumpStacks.add(new Type[]{});
+        Type[] localTypes = FrameT.fromFrame(frame0);
+        jumpLocals.add(localTypes);
     }
 
-    @Override
-    public void visitInvokeDynamicInsn(String name, String desc, Handle bsm, Object... bsmArgs) {
+    void visitCall(Runnable action) {
         final int numLocals = locals.size();
         final List<Object> callLocals = new ArrayList<>(locals);
         // callLocals.addAll(stack);         // TODO Is extension of local vars needed?
         // TODO Are local vars extendable without changing previous frame?
-        // TODO Order of Stack : Last poppable value at index 0. First poppable value at end of array.
+        // Order of Stack - Last poppable value at index 0. First poppable value at end of array.
         final List<Object> callStack = new ArrayList<>(stack);
 
         final Label start = new Label();
@@ -120,8 +121,8 @@ public class Changer extends AnalyzerAdapter {
         super.visitFrame(Opcodes.F_NEW, callLocals.size(),
                 callLocals.toArray(), callStack.size(), callStack.toArray());
 
-        final Type[] localTypes = FrameT.fromFrame(callLocals);
-        final Type[] stackTypes = FrameT.fromFrame(callStack);
+        Type[] localTypes = FrameT.fromFrame(callLocals);
+        Type[] stackTypes = FrameT.fromFrame(callStack);
         jumpLabels.add(start);
         jumpLocals.add(localTypes);
         jumpStacks.add(stackTypes);
@@ -140,18 +141,17 @@ public class Changer extends AnalyzerAdapter {
                 super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), numLocals + i);
             }
         }
-        super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs);
+        action.run();
         super.visitLabel(end);
 
         super.visitLabel(handler);
         callLocals.addAll(callStack);
         super.visitFrame(Opcodes.F_NEW, callLocals.size(),
                 callLocals.toArray(), 1, new Object[]{dccException});
-        // TODO ... create code ... Push local vars and then stack vars
         // Get Cont from exception.
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, dccException,
                 getCont.getName(), getCont.getDescriptor(), false);
-        // TODO Order of local vars. Push index 0 last.
+        // Order of local vars - Push index 0 last.
         for (int i = localTypes.length; i >= 0; --i) {
             Type t = localTypes[i];
             if (t != null) {
@@ -162,7 +162,7 @@ public class Changer extends AnalyzerAdapter {
                         push.getName(), push.getDescriptor(), false);
             }
         }
-        // TODO Order of stack. Push end of array into Cont first. Index 0 gets pushed last.
+        // Order of stack - Push end of array into Cont first. Index 0 gets pushed last.
         for (int i = stackTypes.length; i >= 0; --i) {
             Type t = stackTypes[i];
             if (t != null) {
@@ -178,13 +178,23 @@ public class Changer extends AnalyzerAdapter {
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,
                 contFields.get("pushJump").getName(),
                 contFields.get("pushJump").getDescriptor(), false);
-        // TODO Create new exception. Cont object is on stack.
+        // Create new exception. Cont object is on stack.
+        mv.visitTypeInsn(Opcodes.NEW, dccException);
+        mv.visitInsn(Opcodes.DUP_X1);
+        mv.visitInsn(Opcodes.SWAP);
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, dccException,
+                initException.getName(), initException.getDescriptor(), false);
         super.visitInsn(Opcodes.ATHROW);
     }
 
     @Override
+    public void visitInvokeDynamicInsn(String name, String desc, Handle bsm, Object... bsmArgs) {
+        visitCall(() -> super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs));
+    }
+
+    @Override
     public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
-        super.visitMethodInsn(opcode, owner, name, desc, itf);
+        visitCall(() -> super.visitMethodInsn(opcode, owner, name, desc, itf));
     }
 
     @Override

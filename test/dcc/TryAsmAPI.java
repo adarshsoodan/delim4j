@@ -6,19 +6,36 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.Test;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.Method;
 import org.objectweb.asm.util.ASMifier;
-import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceClassVisitor;
 
 public class TryAsmAPI {
 
     @Test
+    public void verifyNonCont() throws Exception {
+        final String className = TryAsmAPI.class.getCanonicalName();
+        final PrintWriter printer = new PrintWriter(System.out);
+        ClassReader reader = new ClassReader(className);
+        ClassVisitor cv = new ClassVisitor(Opcodes.ASM5) {
+            @Override
+            public MethodVisitor visitMethod(int access, String name, String desc, String signature,
+                    String[] exceptions) {
+                return new Changer(name, access, name, desc,
+                        super.visitMethod(access, name, desc, signature, exceptions));
+            }
+
+        };
+        TraceClassVisitor tracer = new TraceClassVisitor(null, new ASMifier(), printer);
+        reader.accept(tracer, 0);
+    }
+
+    @Test
     public void argTypes() throws Exception {
-        String s = Integer.toString(123491);
-        assert s != null;
         final Method method = Method.getMethod(
                 String.class.getMethod("format", String.class, (new Object[]{}).getClass()));
         final Type[] types = Type.getArgumentTypes(method.getDescriptor());
