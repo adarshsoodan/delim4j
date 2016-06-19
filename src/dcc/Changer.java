@@ -96,6 +96,7 @@ public class Changer extends AnalyzerAdapter {
         final List<Object> callLocals = new ArrayList<>(locals);
         // callLocals.addAll(stack);         // TODO Is extension of local vars needed?
         // TODO Are local vars extendable without changing previous frame?
+        // TODO Order of Stack : Last poppable value at index 0. First poppable value at end of array.
         final List<Object> callStack = new ArrayList<>(stack);
 
         final Label start = new Label();
@@ -105,7 +106,6 @@ public class Changer extends AnalyzerAdapter {
 
         super.visitJumpInsn(Opcodes.GOTO, start);
         super.visitLabel(start);
-        // TODO Order of stack
         super.visitFrame(Opcodes.F_NEW, callLocals.size(),
                 callLocals.toArray(), callStack.size(), callStack.toArray());
 
@@ -116,28 +116,29 @@ public class Changer extends AnalyzerAdapter {
         jumpStacks.add(stackTypes);
 
         // POPs to localvars.
-        for (int i = 0; i < callStack.size(); ++i) {
-            Type t = stackTypes[i];
-            if (t != null) {
-                super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), numLocals + i);
-            }
-        }
-        // PUSHs from local vars in reverse order.
-        for (int i = callStack.size() - 1; i >= 0; --i) {
+        for (int i = stackTypes.length - 1; i >= 0; --i) {
             Type t = stackTypes[i];
             if (t != null) {
                 super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), numLocals + i);
+            }
+        }
+        // PUSHs from local vars in reverse order.
+        for (int i = 0; i < stackTypes.length; ++i) {
+            Type t = stackTypes[i];
+            if (t != null) {
+                super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), numLocals + i);
             }
         }
         super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs);
         super.visitLabel(end);
 
         super.visitLabel(handler);
+        callLocals.addAll(callStack);
         super.visitFrame(Opcodes.F_NEW, callLocals.size(),
                 callLocals.toArray(), 1, new Object[]{dccException});
         // TODO ... create code ...
-        // TODO Order of stack
-        // TODO Order of local vars
+        // TODO Order of stack. Push first poppable value into Cont first. Last poppable value gets pushed last.
+        // TODO Order of local vars. Push index 0 last.
 
         super.visitInsn(Opcodes.ATHROW);
     }
@@ -167,33 +168,35 @@ public class Changer extends AnalyzerAdapter {
             Label start = jumpLabels.get(i);
             Type[] jumpStack = jumpStacks.get(i);
             Type[] jumpVars = jumpLocals.get(i);
-            // TODO Order of stack
             for (Type t : jumpStack) {
                 if (t != null) {
                     Method m = getPopMethod(t.getSort());
                     super.visitVarInsn(Opcodes.ALOAD, contVar);
                     super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                             "Ldcc/rt/Cont;", m.getName(), m.getDescriptor(), false);
+                    if (t.getSort() == Type.OBJECT || t.getSort() == Type.ARRAY) {
+                        super.visitTypeInsn(Opcodes.CHECKCAST, t.getDescriptor());
+                    }
                 }
             }
-            // TODO Order of local vars
-            IntStream.range(0, jumpVars.length).forEach(j -> {
+            for (int j = 0; j < jumpVars.length; ++j) {
                 Type t = jumpVars[j];
                 if (t != null) {
                     Method m = getPopMethod(t.getSort());
                     super.visitVarInsn(Opcodes.ALOAD, contVar);
                     super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                             "Ldcc/rt/Cont;", m.getName(), m.getDescriptor(), false);
-                    super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), j + contVar);
+                    if (t.getSort() == Type.OBJECT || t.getSort() == Type.ARRAY) {
+                        super.visitTypeInsn(Opcodes.CHECKCAST, t.getDescriptor());
+                    }
+                    super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), j);
                 }
-            });
+            }
             super.visitJumpInsn(Opcodes.GOTO, start);
         }
 
         super.visitLabel(defaultLabel);
-
         super.visitVarInsn(Opcodes.ALOAD, contVar);
-
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                 "Ldcc/rt/Cont;", contFields.get("invalidCont").getName(),
                 contFields.get("invalidCont").getDescriptor(), false);
