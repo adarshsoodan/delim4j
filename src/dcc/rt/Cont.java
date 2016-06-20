@@ -90,7 +90,7 @@ public final class Cont implements Cloneable {
         ++posObject;
     }
 
-    final void invalidCont() {
+    final public void invalidCont() {
         throw new RuntimeException("This is an invalid Cont - " + this);
     }
 

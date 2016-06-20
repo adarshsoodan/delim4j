@@ -200,6 +200,7 @@ public class Changer extends AnalyzerAdapter {
                     super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), j);
                 }
             }
+            // TODO Locate first argument and store current cont in it.
             super.visitJumpInsn(Opcodes.GOTO, start);
             // Handler
             super.visitLabel(handler);
