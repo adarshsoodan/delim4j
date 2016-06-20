@@ -18,36 +18,7 @@ import org.objectweb.asm.commons.AnalyzerAdapter;
 import org.objectweb.asm.commons.Method;
 
 // TODO If any call has unintialized value in localvars or stack, do not wrap the call.
-/*
-All frames are in expanded form(i.e. F_NEW) due to requirement of AnalyzerAdapter.
-
-Begin method -> Store frame-0-map of args for cc-tableswitch.
-                create label cc-tableswitch
-                insert goto cc-tableswitch after frame-0-map
-                create and insert label for frame 1
-                copy and insert frame-0-map to frame-1-map
-
-Visit calls  -> retrieve stack-var-types and count
-                Append count local-var-types with stack-var-types vals
-                create start-call-label
-                insert goto start-call-label
-                insert start-call-label
-                insert call-frame-map with new local-var-types and same stack-var-types
-                pop corresponding stack-vars and store in local-vars
-                push stack-vars in same order from local-vars
-                create and insert end-call-label
-Catch block  -> create and insert handler-label with correct exception type ...
-                insert call-frame-map with same local-var-types and stack-var-types with lone exception object
-                associate with start-call-label and end-call-label
-                ... create code ...
-                throw cc-exception with local-vars and pos data.
-tableswitch  -> insert label cc-tableswitch
-                insert frame-0-map
-                create a switch over pos
-                ... each-pos -> Retrieve local-vars
-                                push stack-vars in same order from local-vars
-                                goto start-call-label
- */
+// All frames are in expanded form(i.e. F_NEW) due to requirement of AnalyzerAdapter.
 public class Changer extends AnalyzerAdapter {
 
     static String dccException = "dcc/rt/DccException";
@@ -173,6 +144,8 @@ public class Changer extends AnalyzerAdapter {
             Type[] localVars = callWrapInfo.get(i).getLocals();
             Label handler = callWrapInfo.get(i).getHandler();
             Object[] handlerFrame = callWrapInfo.get(i).getHandlerFrame();
+            // TODO Locate cont position on stack for method called after label start.
+            // TODO After putting cont on stack, make localVars[contVar] null.
             for (int j = 0; j < stackVars.length; ++j) {
                 Type t = stackVars[j];
                 if (t != null) {
@@ -200,7 +173,6 @@ public class Changer extends AnalyzerAdapter {
                     super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), j);
                 }
             }
-            // TODO Locate first argument and store current cont in it.
             super.visitJumpInsn(Opcodes.GOTO, start);
             // Handler
             super.visitLabel(handler);
@@ -310,10 +282,3 @@ public class Changer extends AnalyzerAdapter {
     }
 
 }
-
-/* Primitive types are represented by Opcodes.TOP, Opcodes.INTEGER
-   , Opcodes.FLOAT, Opcodes.LONG, Opcodes.DOUBLE, Opcodes.NULL
-   or Opcodes.UNINITIALIZED_THIS (long and double are represented by a single element).
-   Reference types are represented by String objects (representing internal names)
- */
-//  visitTryCatchBlock must be called before the labels passed as arguments have been visited
