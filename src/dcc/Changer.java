@@ -8,7 +8,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.IntStream;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
@@ -94,8 +93,6 @@ public class Changer extends AnalyzerAdapter {
     void visitCall(Runnable action) {
         final int numLocals = locals.size();
         final List<Object> callLocals = new ArrayList<>(locals);
-        // callLocals.addAll(stack);         // TODO Is extension of local vars needed?
-        // TODO Are local vars extendable without changing previous frame?
         // Order of Stack - Last poppable value at index 0. First poppable value at end of array.
         final List<Object> callStack = new ArrayList<>(stack);
 
@@ -158,11 +155,9 @@ public class Changer extends AnalyzerAdapter {
         int contVar = (hasThis ? 1 : 0);
         super.visitVarInsn(Opcodes.ALOAD, contVar);
         super.visitJumpInsn(Opcodes.IFNULL, frame1);
-        // TODO super.visitFrame(Opcodes.F_NEW, frame0.size(), frame0.toArray(), 0, new Object[]{});
-        // TODO Type[] localTypes = FrameT.fromFrame(frame0);
         Label defaultLabel = new Label();
         Label[] tableLabels = new Label[callWrapInfo.size()];
-        IntStream.range(0, tableLabels.length).forEach(i -> tableLabels[i] = new Label());
+        Arrays.setAll(tableLabels, (i) -> new Label());
 
         super.visitVarInsn(Opcodes.ALOAD, contVar);
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,

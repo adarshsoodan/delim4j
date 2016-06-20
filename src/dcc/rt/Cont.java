@@ -6,7 +6,7 @@ import java.util.function.Function;
 
 public class Cont implements Cloneable {
 
-    Function<Object, Object> f;
+    Function<Object, Object> shifted;
 
 //    final List<int> jumps;
 //    final List<int> ints;
@@ -23,8 +23,8 @@ public class Cont implements Cloneable {
     int posDouble;
     int posObject;
 
-    public Cont(final Function<Object, Object> f) {
-        this.f = f;
+    public Cont(final Function<Object, Object> shifted) {
+        this.shifted = shifted;
         posJump = posInt = posFloat = posLong = posDouble = posObject = 0;
         objects = new ArrayList<>();
     }
