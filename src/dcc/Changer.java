@@ -96,19 +96,18 @@ public class Changer extends AnalyzerAdapter {
         // Order of Stack - Last poppable value at index 0. First poppable value at end of array.
         final Object[] callStack = stack.toArray();
 
+        Object[] handlerFrame = Arrays.copyOf(callLocals, callLocals.length + callStack.length);
+        IntStream.range(callLocals.length, handlerFrame.length).
+                forEach(i -> handlerFrame[i] = callStack[i - callLocals.length]);
+        Type[] localTypes = FrameT.fromFrame(callLocals);
+        Type[] stackTypes = FrameT.fromFrame(callStack);
+
         final Label start = new Label();
         final Label end = new Label();
         final Label handler = new Label();
         super.visitTryCatchBlock(start, end, handler, dccException);
 
-        super.visitJumpInsn(Opcodes.GOTO, start);
-        super.visitLabel(start);
-        super.visitFrame(Opcodes.F_NEW, callLocals.length,
-                callLocals, callStack.length, callStack);
-
-        Type[] localTypes = FrameT.fromFrame(callLocals);
-        Type[] stackTypes = FrameT.fromFrame(callStack);
-
+        // super.visitJumpInsn(Opcodes.GOTO, start);
         // POPs to localvars.
         for (int i = stackTypes.length - 1; i >= 0; --i) {
             Type t = stackTypes[i];
@@ -123,12 +122,12 @@ public class Changer extends AnalyzerAdapter {
                 super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), callLocals.length + i);
             }
         }
+        super.visitLabel(start);
+        super.visitFrame(Opcodes.F_NEW,
+                handlerFrame.length, handlerFrame, callStack.length, callStack);
         action.run();
         super.visitLabel(end);
 
-        Object[] handlerFrame = Arrays.copyOf(callLocals, callLocals.length + callStack.length);
-        IntStream.range(callLocals.length, handlerFrame.length).
-                forEach(i -> handlerFrame[i] = callStack[i - callLocals.length]);
         callWrapInfo.add(new CallWrapInfo(start, stackTypes, localTypes, handler, handlerFrame));
     }
 
@@ -174,7 +173,8 @@ public class Changer extends AnalyzerAdapter {
             Type[] localVars = callWrapInfo.get(i).getLocals();
             Label handler = callWrapInfo.get(i).getHandler();
             Object[] handlerFrame = callWrapInfo.get(i).getHandlerFrame();
-            for (Type t : stackVars) {
+            for (int j = 0; j < stackVars.length; ++j) {
+                Type t = stackVars[j];
                 if (t != null) {
                     Method pop = getPopMethod(t.getSort());
                     super.visitVarInsn(Opcodes.ALOAD, contVar);
@@ -183,6 +183,8 @@ public class Changer extends AnalyzerAdapter {
                     if (t.getSort() == Type.OBJECT || t.getSort() == Type.ARRAY) {
                         super.visitTypeInsn(Opcodes.CHECKCAST, t.getInternalName());
                     }
+                    super.visitInsn(Opcodes.DUP);
+                    super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), localVars.length + j);
                 }
             }
             for (int j = 0; j < localVars.length; ++j) {
@@ -222,7 +224,7 @@ public class Changer extends AnalyzerAdapter {
                 Type t = stackVars[j];
                 if (t != null) {
                     super.visitInsn(Opcodes.DUP);
-                    super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), j + localVars.length);
+                    super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), localVars.length + j);
                     Method push = getPushMethod(stackVars[j].getSort());
                     super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,
                             push.getName(), push.getDescriptor(), false);
@@ -250,6 +252,8 @@ public class Changer extends AnalyzerAdapter {
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                 contDesc, contFields.get("invalidCont").getName(),
                 contFields.get("invalidCont").getDescriptor(), false);
+        super.visitInsn(Opcodes.ACONST_NULL);
+        super.visitInsn(Opcodes.ATHROW);
         // TODO Perhaps add a dummy athrow here, maybe JVM cannot compute dataflow after call to invalidCont.
         super.visitMaxs(maxStack, maxLocals);
     }
