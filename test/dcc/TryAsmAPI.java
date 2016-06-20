@@ -1,6 +1,5 @@
 package dcc;
 
-import java.io.FileInputStream;
 import java.io.PrintWriter;
 import org.junit.Test;
 import org.objectweb.asm.ClassReader;

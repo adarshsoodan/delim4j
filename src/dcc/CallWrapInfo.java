@@ -1,6 +1,5 @@
 package dcc;
 
-import java.util.List;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
 
@@ -10,10 +9,10 @@ public class CallWrapInfo {
     Type[] stack;
     Type[] locals;
     Label handler;
-    List<Object> handlerFrame;
+    Object[] handlerFrame;
 
     public CallWrapInfo(Label callStart, Type[] stack, Type[] locals, Label handler,
-            List<Object> handlerFrame) {
+            Object[] handlerFrame) {
         this.callStart = callStart;
         this.stack = stack;
         this.locals = locals;
@@ -37,7 +36,7 @@ public class CallWrapInfo {
         return handler;
     }
 
-    public List<Object> getHandlerFrame() {
+    public Object[] getHandlerFrame() {
         return handlerFrame;
     }
 }

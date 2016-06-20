@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.IntStream;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
@@ -52,7 +53,7 @@ public class Changer extends AnalyzerAdapter {
     static String dccException = "dcc/rt/DccException";
     static String contDesc = "dcc/rt/Cont";
 
-    List<Object> frame0 = new ArrayList<>();
+    Object[] frame0;
     Label frame1 = new Label();
     Label ccTableSwitch = new Label();
 
@@ -66,7 +67,7 @@ public class Changer extends AnalyzerAdapter {
 
     public Changer(String owner, int access, String name, String desc, MethodVisitor mv) {
         super(Opcodes.ASM5, owner, access, name, desc, mv);
-        frame0.addAll(locals);
+        frame0 = locals.toArray();
         hasThis = ((access & Opcodes.ACC_STATIC) == 0);
         if (methodsLoaded.get() == false) {
             Arrays.stream(Cont.class.getDeclaredMethods()).forEach(m -> {
@@ -87,14 +88,13 @@ public class Changer extends AnalyzerAdapter {
         super.visitCode();
         super.visitJumpInsn(Opcodes.GOTO, ccTableSwitch);
         super.visitLabel(frame1);
-        super.visitFrame(Opcodes.F_NEW, frame0.size(), frame0.toArray(), 0, new Object[]{});
+        super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
     }
 
     void visitCall(Runnable action) {
-        final int numLocals = locals.size();
-        final List<Object> callLocals = new ArrayList<>(locals);
+        final Object[] callLocals = locals.toArray();
         // Order of Stack - Last poppable value at index 0. First poppable value at end of array.
-        final List<Object> callStack = new ArrayList<>(stack);
+        final Object[] callStack = stack.toArray();
 
         final Label start = new Label();
         final Label end = new Label();
@@ -103,8 +103,8 @@ public class Changer extends AnalyzerAdapter {
 
         super.visitJumpInsn(Opcodes.GOTO, start);
         super.visitLabel(start);
-        super.visitFrame(Opcodes.F_NEW, callLocals.size(),
-                callLocals.toArray(), callStack.size(), callStack.toArray());
+        super.visitFrame(Opcodes.F_NEW, callLocals.length,
+                callLocals, callStack.length, callStack);
 
         Type[] localTypes = FrameT.fromFrame(callLocals);
         Type[] stackTypes = FrameT.fromFrame(callStack);
@@ -113,20 +113,22 @@ public class Changer extends AnalyzerAdapter {
         for (int i = stackTypes.length - 1; i >= 0; --i) {
             Type t = stackTypes[i];
             if (t != null) {
-                super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), numLocals + i);
+                super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), callLocals.length + i);
             }
         }
         // PUSHs from local vars in reverse order.
         for (int i = 0; i < stackTypes.length; ++i) {
             Type t = stackTypes[i];
             if (t != null) {
-                super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), numLocals + i);
+                super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), callLocals.length + i);
             }
         }
         action.run();
         super.visitLabel(end);
 
-        callLocals.addAll(callStack);
+        Object[] handlerFrame = Arrays.copyOf(callLocals, callLocals.length + callStack.length);
+        IntStream.range(callLocals.length, handlerFrame.length).
+                forEach(i -> handlerFrame[i] = callStack[i - callLocals.length]);
         callWrapInfo.add(new CallWrapInfo(start, stackTypes, localTypes, handler, callLocals));
     }
 
@@ -151,7 +153,7 @@ public class Changer extends AnalyzerAdapter {
     @Override
     public void visitMaxs(int maxStack, int maxLocals) {
         super.visitLabel(ccTableSwitch);
-        super.visitFrame(Opcodes.F_NEW, frame0.size(), frame0.toArray(), 0, new Object[]{});
+        super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
         int contVar = (hasThis ? 1 : 0);
         super.visitVarInsn(Opcodes.ALOAD, contVar);
         super.visitJumpInsn(Opcodes.IFNULL, frame1);
@@ -166,12 +168,12 @@ public class Changer extends AnalyzerAdapter {
         super.visitTableSwitchInsn(0, tableLabels.length - 1, defaultLabel, tableLabels);
         for (int i = 0; i < tableLabels.length; i++) {
             super.visitLabel(tableLabels[i]);
-            super.visitFrame(Opcodes.F_NEW, frame0.size(), frame0.toArray(), 0, new Object[]{});
+            super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
             Label start = callWrapInfo.get(i).callStart;
             Type[] stackVars = callWrapInfo.get(i).getStack();
             Type[] localVars = callWrapInfo.get(i).getLocals();
             Label handler = callWrapInfo.get(i).getHandler();
-            List<Object> handlerFrame = callWrapInfo.get(i).getHandlerFrame();
+            Object[] handlerFrame = callWrapInfo.get(i).getHandlerFrame();
             for (Type t : stackVars) {
                 if (t != null) {
                     Method pop = getPopMethod(t.getSort());
@@ -199,8 +201,8 @@ public class Changer extends AnalyzerAdapter {
             super.visitJumpInsn(Opcodes.GOTO, start);
             // Handler
             super.visitLabel(handler);
-            super.visitFrame(Opcodes.F_NEW, handlerFrame.size(),
-                    handlerFrame.toArray(), 1, new Object[]{dccException});
+            super.visitFrame(Opcodes.F_NEW,
+                    handlerFrame.length, handlerFrame, 1, new Object[]{dccException});
             // Get Cont from exception.
             super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, dccException,
                     getCont.getName(), getCont.getDescriptor(), false);
@@ -242,7 +244,7 @@ public class Changer extends AnalyzerAdapter {
 
         super.visitLabel(defaultLabel);
 
-        super.visitFrame(Opcodes.F_NEW, frame0.size(), frame0.toArray(), 0, new Object[]{});
+        super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
         super.visitVarInsn(Opcodes.ALOAD, contVar);
 
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,

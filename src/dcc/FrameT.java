@@ -1,6 +1,5 @@
 package dcc;
 
-import java.util.List;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
@@ -24,10 +23,10 @@ public class FrameT {
         }
     }
 
-    public static Type[] fromFrame(List<Object> fs) {
-        Type[] ret = new Type[fs.size()];
-        for(int i = 0; i < ret.length; ++i) {
-            ret[i] = fromFrame(fs.get(i));
+    public static Type[] fromFrame(Object[] fs) {
+        Type[] ret = new Type[fs.length];
+        for (int i = 0; i < ret.length; ++i) {
+            ret[i] = fromFrame(fs[i]);
         }
         return ret;
     }

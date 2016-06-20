@@ -4,15 +4,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-public class Cont implements Cloneable {
+public final class Cont implements Cloneable {
 
     Function<Object, Object> shifted;
 
-//    final List<int> jumps;
-//    final List<int> ints;
-//    final List<float> floats;
-//    final List<long> longs;
-//    final List<double> doubles;
+//    List<int> jumps;
+//    List<int> ints;
+//    List<float> floats;
+//    List<long> longs;
+//    List<double> doubles;
     List<Object> objects;
 
     int posJump;
