@@ -250,7 +250,7 @@ public class Changer extends AnalyzerAdapter {
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                 contDesc, contFields.get("invalidCont").getName(),
                 contFields.get("invalidCont").getDescriptor(), false);
-        // TODO Add a dummy athrow here. JVM cannot compute dataflow after call to invalidCont.
+        // TODO Perhaps add a dummy athrow here, maybe JVM cannot compute dataflow after call to invalidCont.
         super.visitMaxs(maxStack, maxLocals);
     }
 
