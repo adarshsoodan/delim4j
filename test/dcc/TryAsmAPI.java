@@ -1,5 +1,6 @@
 package dcc;
 
+import dcc.rt.Cont;
 import dcc.util.BytesClassLoader;
 import java.io.PrintWriter;
 import org.junit.Test;
@@ -13,7 +14,7 @@ import org.objectweb.asm.util.TraceClassVisitor;
 
 public class TryAsmAPI {
 
-    int dummyMethod() {
+    int dummyMethod(Cont c) {
         return Integer.parseInt("0");
     }
 
@@ -38,7 +39,14 @@ public class TryAsmAPI {
             reader.accept(cv, ClassReader.EXPAND_FRAMES);
         }
         byte[] b = cw.toByteArray();
-        Class<?> c = (new BytesClassLoader()).fromBytes("dcc.TryAsmAPI", b);
+        {
+            Class<?> c = (new BytesClassLoader()).fromBytes("dcc.TryAsmAPI", b);
+            Object o = c.newInstance();
+//            Map<String, Method> ms = Arrays.stream(c.getDeclaredMethods())
+//                    .collect(Collectors.toMap(m -> m.getName(), m -> m));
+//            Method m = ms.get("dummyMethod");
+//            m.invoke(o);
+        }
         {
             ClassReader reader = new ClassReader(b);
             PrintWriter printer = new PrintWriter(System.out);

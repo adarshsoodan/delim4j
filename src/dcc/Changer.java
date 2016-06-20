@@ -129,7 +129,7 @@ public class Changer extends AnalyzerAdapter {
         Object[] handlerFrame = Arrays.copyOf(callLocals, callLocals.length + callStack.length);
         IntStream.range(callLocals.length, handlerFrame.length).
                 forEach(i -> handlerFrame[i] = callStack[i - callLocals.length]);
-        callWrapInfo.add(new CallWrapInfo(start, stackTypes, localTypes, handler, callLocals));
+        callWrapInfo.add(new CallWrapInfo(start, stackTypes, localTypes, handler, handlerFrame));
     }
 
     @Override
