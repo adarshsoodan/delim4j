@@ -1,4 +1,4 @@
-package dcc;
+package dcc.util;
 
 public class BytesClassLoader extends ClassLoader {
 

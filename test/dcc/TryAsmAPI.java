@@ -1,5 +1,6 @@
 package dcc;
 
+import dcc.util.BytesClassLoader;
 import java.io.PrintWriter;
 import org.junit.Test;
 import org.objectweb.asm.ClassReader;
