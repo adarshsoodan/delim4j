@@ -184,7 +184,7 @@ public class Changer extends AnalyzerAdapter {
                     super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                             contDesc, pop.getName(), pop.getDescriptor(), false);
                     if (t.getSort() == Type.OBJECT || t.getSort() == Type.ARRAY) {
-                        super.visitTypeInsn(Opcodes.CHECKCAST, t.getDescriptor());
+                        super.visitTypeInsn(Opcodes.CHECKCAST, t.getInternalName());
                     }
                 }
             }
@@ -196,7 +196,7 @@ public class Changer extends AnalyzerAdapter {
                     super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                             contDesc, pop.getName(), pop.getDescriptor(), false);
                     if (t.getSort() == Type.OBJECT || t.getSort() == Type.ARRAY) {
-                        super.visitTypeInsn(Opcodes.CHECKCAST, t.getDescriptor());
+                        super.visitTypeInsn(Opcodes.CHECKCAST, t.getInternalName());
                     }
                     super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), j);
                 }
@@ -251,7 +251,7 @@ public class Changer extends AnalyzerAdapter {
         super.visitVarInsn(Opcodes.ALOAD, contVar);
 
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
-                "Ldcc/rt/Cont;", contFields.get("invalidCont").getName(),
+                contDesc, contFields.get("invalidCont").getName(),
                 contFields.get("invalidCont").getDescriptor(), false);
 
         super.visitMaxs(maxStack, maxLocals);

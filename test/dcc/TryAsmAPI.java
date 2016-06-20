@@ -13,8 +13,6 @@ import org.objectweb.asm.util.TraceClassVisitor;
 
 public class TryAsmAPI {
 
-    static String sampleClass = "C:\\Users\\user\\Desktop\\workspaces\\tmp\\dcc\\TryAsmAPI.class";
-
     @Test
     public void verifyNonCont() throws Exception {
         final String className = TryAsmAPI.class.getCanonicalName();
@@ -35,8 +33,9 @@ public class TryAsmAPI {
             ClassReader reader = new ClassReader(className);
             reader.accept(cv, ClassReader.EXPAND_FRAMES);
         }
+        byte[] b = cw.toByteArray();
+        Class<?> c = (new BytesClassLoader()).defineClass("dcc.TryAsmAPI", b);
         {
-            byte[] b = cw.toByteArray();
             ClassReader reader = new ClassReader(b);
             PrintWriter printer = new PrintWriter(System.out);
             TraceClassVisitor tracer = new TraceClassVisitor(null, new Textifier(), printer);
@@ -44,12 +43,4 @@ public class TryAsmAPI {
         }
     }
 
-    @Test
-    public void insnState() throws Exception {
-        PrintWriter printer = new PrintWriter(System.out);
-        ClassReader reader = new ClassReader(new FileInputStream(sampleClass));
-
-        TraceClassVisitor tracer = new TraceClassVisitor(null, new Textifier(), printer);
-        reader.accept(tracer, ClassReader.EXPAND_FRAMES | ClassReader.SKIP_DEBUG);
-    }
 }
