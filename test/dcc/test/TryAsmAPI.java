@@ -1,46 +1,31 @@
-package dcc;
+package dcc.test;
 
+import dcc.ContClassVisitor;
 import dcc.rt.Cont;
 import dcc.rt.DccException;
+import dcc.test.data.DummyClass;
 import dcc.util.BytesClassLoader;
 import java.io.PrintWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.junit.Test;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.Type;
 import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceClassVisitor;
 
 public class TryAsmAPI {
 
     @Test
-    public void methodDesc() {
-        Map<String, Method> methods = new HashMap<>();
-        Arrays.stream(String.class.getDeclaredMethods()).
-                filter(m -> Modifier.isPublic(m.getModifiers())).
-                forEach(m -> {
-                    methods.put(m.getName(), m);
-                });
-        Method m = methods.get("replaceFirst");
-        String desc = Type.getMethodDescriptor(m);
-        Type[] args = Type.getMethodType(desc).getArgumentTypes();
-        System.out.println(desc);
-        System.out.println(Arrays.toString(args));
-        System.out.println(args[0].getInternalName());
-
-    }
-
-    @Test
     public void verifyNonCont() throws Exception {
-        final String className = TryAsmAPI.class.getCanonicalName();
+        String className = DummyClass.class.getCanonicalName();
         ClassWriter cw = new ClassWriter(0);
         ClassVisitor cv = new ContClassVisitor(cw);
         {
@@ -51,11 +36,11 @@ public class TryAsmAPI {
         {
             Runnable invoker = () -> {
                 try {
-                    Class<?> c = (new BytesClassLoader()).fromBytes("dcc.TryAsmAPI", b);
+                    Class<?> c = (new BytesClassLoader()).fromBytes(className, b);
                     Object o = c.newInstance();
                     Map<String, Method> ms = Arrays.stream(c.getDeclaredMethods())
                             .collect(Collectors.toMap(m -> m.getName(), m -> m));
-                    Method m = ms.get("dummyMethod");
+                    Method m = ms.get("entry1");
                     try {
                         m.invoke(o, null, (Runnable) () -> {
                             Cont cont = new Cont(obj -> obj);
@@ -73,6 +58,9 @@ public class TryAsmAPI {
             };
             invoker.run();
         }
+        Files.write(
+                Paths.get("C:\\Users\\user\\Desktop\\workspaces\\tmp\\DummyClass.class"),
+                b, StandardOpenOption.CREATE_NEW);
         {
             Runnable display = () -> {
                 ClassReader reader = new ClassReader(b);
@@ -80,12 +68,8 @@ public class TryAsmAPI {
                 TraceClassVisitor tracer = new TraceClassVisitor(null, new Textifier(), printer);
                 reader.accept(tracer, ClassReader.EXPAND_FRAMES | ClassReader.SKIP_DEBUG);
             };
-//            display.run();
+            display.run();
         }
     }
 
-    public int dummyMethod(Cont cont, Runnable action) throws Exception {
-        action.run();
-        return Integer.parseInt("0");
-    }
 }

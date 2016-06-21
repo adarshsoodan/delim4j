@@ -7,8 +7,17 @@ import org.objectweb.asm.Type;
 
 public class ContClassVisitor extends ClassVisitor {
 
+    String name;
+
     public ContClassVisitor(ClassVisitor cv) {
         super(Opcodes.ASM5, cv);
+    }
+
+    @Override
+    public void visit(int version, int access, String name, String signature, String superName,
+            String[] interfaces) {
+        this.name = name;
+        super.visit(version, access, name, signature, superName, interfaces); //To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
@@ -21,7 +30,7 @@ public class ContClassVisitor extends ClassVisitor {
                 || !argTypes[0].getInternalName().equals("dcc/rt/Cont")) {
             return super.visitMethod(access, name, desc, signature, exceptions);
         } else {
-            return new Changer("dcc/TryAsmAPI", access, name, desc,
+            return new Changer(this.name, access, name, desc,
                     super.visitMethod(access, name, desc, signature, exceptions));
         }
     }
