@@ -17,7 +17,6 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.AnalyzerAdapter;
 import org.objectweb.asm.commons.Method;
 
-// TODO If any call has unintialized value in localvars or stack, do not wrap the call.
 // All frames are in expanded form(i.e. F_NEW) due to requirement of AnalyzerAdapter.
 public class Changer extends AnalyzerAdapter {
 
@@ -62,7 +61,7 @@ public class Changer extends AnalyzerAdapter {
         super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
     }
 
-    void visitCall(Runnable action) {
+    void visitCall(Runnable action, int contIndexOnStack) {
         final Object[] callLocals = locals.toArray();
         // Order of Stack - Last poppable value at index 0. First poppable value at end of array.
         final Object[] callStack = stack.toArray();
@@ -78,7 +77,6 @@ public class Changer extends AnalyzerAdapter {
         final Label handler = new Label();
         super.visitTryCatchBlock(start, end, handler, dccException);
 
-        // super.visitJumpInsn(Opcodes.GOTO, start);
         // POPs to localvars.
         for (int i = stackTypes.length - 1; i >= 0; --i) {
             Type t = stackTypes[i];
@@ -99,24 +97,42 @@ public class Changer extends AnalyzerAdapter {
         action.run();
         super.visitLabel(end);
 
-        callWrapInfo.add(new CallWrapInfo(start, stackTypes, localTypes, handler, handlerFrame));
+        callWrapInfo.add(new CallWrapInfo(start, stackTypes, localTypes,
+                handler, handlerFrame, contIndexOnStack));
+    }
+
+    boolean notContify(String name, String desc) {
+        Type[] args = Type.getMethodType(desc).getArgumentTypes();
+        boolean ret = (args.length < 1)
+                || (args[0].getSort() != Type.OBJECT)
+                || !(contDesc.equals(args[0].getInternalName()));
+        ret = ret || "<init>".equals(name) || "<clinit>".equals(name);
+        ret = ret || locals.stream().anyMatch(
+                v -> Opcodes.UNINITIALIZED_THIS.equals(v) || (v instanceof Label));
+        ret = ret || stack.stream().anyMatch(
+                v -> Opcodes.UNINITIALIZED_THIS.equals(v) || (v instanceof Label));
+        return ret;
     }
 
     @Override
     public void visitInvokeDynamicInsn(String name, String desc, Handle bsm, Object... bsmArgs) {
-        if ("<init>".equals(name) || "<clinit>".equals(name)) {
+        if (notContify(name, desc)) {
             super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs);
         } else {
-            visitCall(() -> super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs));
+            int contIndexOnStack = Type.getMethodType(desc).getArgumentTypes().length - 1;
+            visitCall(() -> super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs),
+                    contIndexOnStack);
         }
     }
 
     @Override
     public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
-        if ("<init>".equals(name) || "<clinit>".equals(name)) {
+        if (notContify(name, desc)) {
             super.visitMethodInsn(opcode, owner, name, desc, itf);
         } else {
-            visitCall(() -> super.visitMethodInsn(opcode, owner, name, desc, itf));
+            int contIndexOnStack = Type.getMethodType(desc).getArgumentTypes().length - 1;
+            visitCall(() -> super.visitMethodInsn(opcode, owner, name, desc, itf),
+                    contIndexOnStack);
         }
     }
 
@@ -124,14 +140,19 @@ public class Changer extends AnalyzerAdapter {
     public void visitMaxs(int maxStack, int maxLocals) {
         super.visitLabel(ccTableSwitch);
         super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
-        int contVar = (hasThis ? 1 : 0);
-        super.visitVarInsn(Opcodes.ALOAD, contVar);
+        if (callWrapInfo.isEmpty()) {
+            super.visitJumpInsn(Opcodes.GOTO, frame1);
+            super.visitMaxs(maxStack, maxLocals);
+            return;
+        }
+        int contArg = (hasThis ? 1 : 0);
+        super.visitVarInsn(Opcodes.ALOAD, contArg);
         super.visitJumpInsn(Opcodes.IFNULL, frame1);
         Label defaultLabel = new Label();
         Label[] tableLabels = new Label[callWrapInfo.size()];
         Arrays.setAll(tableLabels, (i) -> new Label());
 
-        super.visitVarInsn(Opcodes.ALOAD, contVar);
+        super.visitVarInsn(Opcodes.ALOAD, contArg);
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,
                 contFields.get("popJump").getName(),
                 contFields.get("popJump").getDescriptor(), false);
@@ -139,18 +160,20 @@ public class Changer extends AnalyzerAdapter {
         for (int i = 0; i < tableLabels.length; i++) {
             super.visitLabel(tableLabels[i]);
             super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
-            Label start = callWrapInfo.get(i).callStart;
-            Type[] stackVars = callWrapInfo.get(i).getStack();
-            Type[] localVars = callWrapInfo.get(i).getLocals();
-            Label handler = callWrapInfo.get(i).getHandler();
-            Object[] handlerFrame = callWrapInfo.get(i).getHandlerFrame();
+            CallWrapInfo cwi = callWrapInfo.get(i);
+            Label start = cwi.callStart;
+            Type[] stackVars = cwi.getStack();
+            Type[] localVars = cwi.getLocals();
+            Label handler = cwi.getHandler();
+            Object[] handlerFrame = cwi.getHandlerFrame();
+            int contIndexOnStack = cwi.getContIndexOnStack();
             // TODO Locate cont position on stack for method called after label start.
-            // TODO After putting cont on stack, make localVars[contVar] null.
+            // TODO After putting current cont on stack, make localVars[contArg] null.
             for (int j = 0; j < stackVars.length; ++j) {
                 Type t = stackVars[j];
                 if (t != null) {
                     Method pop = getPopMethod(t.getSort());
-                    super.visitVarInsn(Opcodes.ALOAD, contVar);
+                    super.visitVarInsn(Opcodes.ALOAD, contArg);
                     super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                             contDesc, pop.getName(), pop.getDescriptor(), false);
                     if (t.getSort() == Type.OBJECT || t.getSort() == Type.ARRAY) {
@@ -164,7 +187,7 @@ public class Changer extends AnalyzerAdapter {
                 Type t = localVars[j];
                 if (t != null) {
                     Method pop = getPopMethod(t.getSort());
-                    super.visitVarInsn(Opcodes.ALOAD, contVar);
+                    super.visitVarInsn(Opcodes.ALOAD, contArg);
                     super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                             contDesc, pop.getName(), pop.getDescriptor(), false);
                     if (t.getSort() == Type.OBJECT || t.getSort() == Type.ARRAY) {
@@ -220,7 +243,7 @@ public class Changer extends AnalyzerAdapter {
         super.visitLabel(defaultLabel);
 
         super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
-        super.visitVarInsn(Opcodes.ALOAD, contVar);
+        super.visitVarInsn(Opcodes.ALOAD, contArg);
 
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                 contDesc, contFields.get("invalidCont").getName(),

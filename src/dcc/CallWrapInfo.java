@@ -10,14 +10,16 @@ public class CallWrapInfo {
     Type[] locals;
     Label handler;
     Object[] handlerFrame;
+    int contIndexOnStack;
 
     public CallWrapInfo(Label callStart, Type[] stack, Type[] locals, Label handler,
-            Object[] handlerFrame) {
+            Object[] handlerFrame, int contIndexOnStack) {
         this.callStart = callStart;
         this.stack = stack;
         this.locals = locals;
         this.handler = handler;
         this.handlerFrame = handlerFrame;
+        this.contIndexOnStack = contIndexOnStack;
     }
 
     public Label getCallStart() {
@@ -39,4 +41,9 @@ public class CallWrapInfo {
     public Object[] getHandlerFrame() {
         return handlerFrame;
     }
+
+    public int getContIndexOnStack() {
+        return contIndexOnStack;
+    }
+
 }

@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.function.Function;
 
 public final class Cont implements Cloneable {
-
+    // TODO Semantics of shift operator.
     Function<Object, Object> shifted;
 
 //    List<int> jumps;
@@ -23,7 +23,7 @@ public final class Cont implements Cloneable {
     int posDouble;
     int posObject;
 
-    public Cont(final Function<Object, Object> shifted) {
+    public Cont(Function<Object, Object> shifted) {
         this.shifted = shifted;
         posJump = posInt = posFloat = posLong = posDouble = posObject = 0;
         objects = new ArrayList<>();
