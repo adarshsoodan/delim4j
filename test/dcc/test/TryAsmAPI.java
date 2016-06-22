@@ -64,7 +64,7 @@ public class TryAsmAPI {
                 ClassReader reader = new ClassReader(b);
                 PrintWriter printer = new PrintWriter(System.out);
                 TraceClassVisitor tracer = new TraceClassVisitor(null, new Textifier(), printer);
-                reader.accept(tracer, ClassReader.EXPAND_FRAMES | ClassReader.SKIP_DEBUG);
+                reader.accept(tracer, ClassReader.EXPAND_FRAMES);
             };
             display.run();
         }

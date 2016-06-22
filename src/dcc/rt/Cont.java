@@ -1,19 +1,20 @@
 package dcc.rt;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Arrays;
 import java.util.function.Function;
 
 public final class Cont implements Cloneable {
+
+    static final int increment = 16;
     // TODO Semantics of shift operator.
     Function<Object, Object> shifted;
 
-//    List<int> jumps;
-//    List<int> ints;
-//    List<float> floats;
-//    List<long> longs;
-//    List<double> doubles;
-    List<Object> objects;
+    int[] jumps;
+    int[] ints;
+    float[] floats;
+    long[] longs;
+    double[] doubles;
+    Object[] objects;
 
     int posJump;
 
@@ -26,67 +27,89 @@ public final class Cont implements Cloneable {
     public Cont(Function<Object, Object> shifted) {
         this.shifted = shifted;
         posJump = posInt = posFloat = posLong = posDouble = posObject = 0;
-        objects = new ArrayList<>();
+        jumps = new int[increment];
+        ints = new int[increment];
+        floats = new float[increment];
+        longs = new long[increment];
+        doubles = new double[increment];
+        objects = new Object[increment];
     }
 
     final public int popJump() {
         --posJump;
-        return -1;
+        return jumps[posJump];
     }
 
-    final public void pushJump(final int jump) {
-        // jumps.add(jump);
+    final public void pushJump(final int x) {
+        if (posJump == jumps.length) {
+            jumps = Arrays.copyOf(jumps, jumps.length + increment);
+        }
+        jumps[posJump] = x;
         ++posJump;
     }
 
     final public int popInt() {
         --posInt;
-        return -1;
+        return ints[posInt];
     }
 
     final public void pushInt(final int x) {
-        // ints.add(x);
+        if (posInt == ints.length) {
+            ints = Arrays.copyOf(ints, ints.length + increment);
+        }
+        ints[posInt] = x;
         ++posInt;
     }
 
     final public float popFloat() {
         --posFloat;
-        return -1.0f;
+        return floats[posFloat];
     }
 
     final public void pushFloat(final float x) {
-        // floats.add(x);
+        if (posFloat == floats.length) {
+            floats = Arrays.copyOf(floats, floats.length + increment);
+        }
+        floats[posFloat] = x;
         ++posFloat;
     }
 
     final public long popLong() {
         --posLong;
-        return -1L;
+        return longs[posLong];
     }
 
     final public void pushLong(final long x) {
-        // longs.add(x);
+        if (posLong == longs.length) {
+            longs = Arrays.copyOf(longs, longs.length + increment);
+        }
+        longs[posLong] = x;
         ++posLong;
     }
 
     final public double popDouble() {
         --posDouble;
-        return -1.0;
+        return doubles[posDouble];
     }
 
     final public void pushDouble(final double x) {
-        // doubles.add(x);
+        if (posDouble == doubles.length) {
+            doubles = Arrays.copyOf(doubles, doubles.length + increment);
+        }
+        doubles[posDouble] = x;
         ++posDouble;
     }
 
     final public Object popObject() {
         --posObject;
-        final Object ret = objects.get(posObject);
-        return ret;
+        return objects[posObject];
     }
 
     final public void pushObject(final Object o) {
-        objects.add(o);
+        if (posObject == objects.length) {
+            objects = Arrays.copyOf(objects, objects.length + increment);
+        }
+        objects[posObject] = o;
         ++posObject;
     }
 
