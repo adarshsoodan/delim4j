@@ -5,9 +5,32 @@ import java.util.function.Function;
 
 public final class Cont implements Cloneable {
 
+    public static final Object startContext(Function<Cont, Object> context) {
+        try {
+            return context.apply(null);
+        } catch (DccException e) {
+            Cont cont = e.getCont();
+            Resumable resumable = new Resumable(cont, context);
+            Function<Resumable, Object> receiver = cont.receiver;
+            return receiver.apply(resumable);
+        }
+    }
+
+    public static final Object captureContext(
+            Cont cont,
+            Function<Resumable, Object> receiver) {
+        if (cont == null) {
+            // Start - capture the stack
+            throw new DccException(new Cont(receiver));
+        } else {
+            // Finish - resume the stack
+            return cont.getSubstitution();
+        }
+    }
+
     static final int increment = 16;
-    // TODO Semantics of shift operator.
-    Function<Object, Object> shifted;
+    Function<Resumable, Object> receiver;
+    Object substitution;
 
     int[] jumps;
     int[] ints;
@@ -24,8 +47,8 @@ public final class Cont implements Cloneable {
     int posDouble;
     int posObject;
 
-    public Cont(Function<Object, Object> shifted) {
-        this.shifted = shifted;
+    public Cont(Function<Resumable, Object> receiver) {
+        this.receiver = receiver;
         posJump = posInt = posFloat = posLong = posDouble = posObject = 0;
         jumps = new int[increment];
         ints = new int[increment];
@@ -33,6 +56,14 @@ public final class Cont implements Cloneable {
         longs = new long[increment];
         doubles = new double[increment];
         objects = new Object[increment];
+    }
+
+    public Object getSubstitution() {
+        return substitution;
+    }
+
+    public void setSubstitution(Object substitution) {
+        this.substitution = substitution;
     }
 
     final public int popJump() {
@@ -118,7 +149,11 @@ public final class Cont implements Cloneable {
     }
 
     @Override
-    final public Object clone() throws CloneNotSupportedException {
-        return super.clone();
+    final public Cont clone() {
+        try {
+            return (Cont) super.clone();
+        } catch (CloneNotSupportedException ex) {
+            throw new RuntimeException(ex);
+        }
     }
 }

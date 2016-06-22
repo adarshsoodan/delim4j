@@ -40,9 +40,9 @@ public class TryAsmAPI {
                     Method m = ms.get("entry1");
                     try {
                         m.invoke(o, null, (Runnable) () -> {
-                            Cont cont = new Cont(obj -> obj);
-                            throw (new DccException(cont));
-                        });
+                             Cont cont = new Cont(() -> null);
+                             throw (new DccException(cont));
+                         });
                     } catch (InvocationTargetException ite) {
                         DccException de = (DccException) ite.getCause();
                         Cont cont = de.getCont();
