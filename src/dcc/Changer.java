@@ -184,8 +184,6 @@ public class Changer extends AnalyzerAdapter {
             Label handler = cwi.getHandler();
             Object[] handlerFrame = cwi.getHandlerFrame();
             int contIndexOnStack = cwi.getContIndexOnStack();
-            // TODO Locate cont position on stack for method called after label start.
-            // TODO After putting current cont on stack, make localVars[contIndexOnStack] null.
             // Copy cont reference as contArg is set null during restoration.
             int contCopy = localVars.length + stackVars.length;
             super.visitVarInsn(Opcodes.ALOAD, contArg);
