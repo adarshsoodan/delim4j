@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
@@ -20,6 +21,9 @@ public class Changer extends AnalyzerAdapter {
 
     static String dccException = "dcc/rt/DccException";
     static String contDesc = "dcc/rt/Cont";
+    static String annotation = "Ldcc/rt/Contify;";
+
+    boolean annotationPresent = false;
 
     static AtomicBoolean methodsLoaded = new AtomicBoolean(false);
     static Map<String, Method> contMethods = new HashMap<>();
@@ -52,11 +56,62 @@ public class Changer extends AnalyzerAdapter {
     }
 
     @Override
+    public AnnotationVisitor visitParameterAnnotation(int parameter, String desc, boolean visible) {
+        if (parameter == 0 && annotation.equals(desc)) {
+            annotationPresent = true;
+        }
+        return super.visitParameterAnnotation(parameter, desc, visible);
+    }
+
+    @Override
     public void visitCode() {
         super.visitCode();
-        super.visitJumpInsn(Opcodes.GOTO, ccTableSwitch);
-        super.visitLabel(frame1);
-        super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
+        if (annotationPresent) {
+            super.visitJumpInsn(Opcodes.GOTO, ccTableSwitch);
+            super.visitLabel(frame1);
+            super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
+        }
+    }
+
+    @Override
+    public void visitInvokeDynamicInsn(String name, String desc, Handle bsm, Object... bsmArgs) {
+        if (notContify(name, desc)) {
+            super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs);
+        } else {
+            int contIndexOnStack = stack.size() - Type.getMethodType(desc).getArgumentTypes().length;
+            visitCall(() -> super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs),
+                    contIndexOnStack);
+        }
+    }
+
+    @Override
+    public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
+        if (notContify(name, desc)) {
+            super.visitMethodInsn(opcode, owner, name, desc, itf);
+        } else {
+            int contIndexOnStack = stack.size() - Type.getMethodType(desc).getArgumentTypes().length;
+            visitCall(() -> super.visitMethodInsn(opcode, owner, name, desc, itf),
+                    contIndexOnStack);
+        }
+    }
+
+    @Override
+    public void visitMaxs(int maxStack, int maxLocals) {
+        if (annotationPresent) {
+            visitCodeEpilogue();
+        }
+        super.visitMaxs(maxStack, maxLocals);
+    }
+
+    boolean notContify(String name, String desc) {
+        boolean ret = !annotationPresent;
+        ret = ret || !(desc.startsWith("(Ldcc/rt/Cont;"));
+        ret = ret || "<init>".equals(name) || "<clinit>".equals(name);
+        ret = ret || stack.stream().anyMatch(
+                v -> Opcodes.UNINITIALIZED_THIS.equals(v) || (v instanceof Label));
+        ret = ret || locals.stream().anyMatch(
+                v -> Opcodes.UNINITIALIZED_THIS.equals(v) || (v instanceof Label));
+        return ret;
     }
 
     void visitCall(Runnable action, int contIndexOnStack) {
@@ -98,40 +153,7 @@ public class Changer extends AnalyzerAdapter {
                 handler, handlerFrame, contIndexOnStack));
     }
 
-    boolean notContify(String name, String desc) {
-        boolean ret = !(desc.startsWith("(Ldcc/rt/Cont;"));
-        ret = ret || "<init>".equals(name) || "<clinit>".equals(name);
-        ret = ret || locals.stream().anyMatch(
-                v -> Opcodes.UNINITIALIZED_THIS.equals(v) || (v instanceof Label));
-        ret = ret || stack.stream().anyMatch(
-                v -> Opcodes.UNINITIALIZED_THIS.equals(v) || (v instanceof Label));
-        return ret;
-    }
-
-    @Override
-    public void visitInvokeDynamicInsn(String name, String desc, Handle bsm, Object... bsmArgs) {
-        if (notContify(name, desc)) {
-            super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs);
-        } else {
-            int contIndexOnStack = stack.size() - Type.getMethodType(desc).getArgumentTypes().length;
-            visitCall(() -> super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs),
-                    contIndexOnStack);
-        }
-    }
-
-    @Override
-    public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
-        if (notContify(name, desc)) {
-            super.visitMethodInsn(opcode, owner, name, desc, itf);
-        } else {
-            int contIndexOnStack = stack.size() - Type.getMethodType(desc).getArgumentTypes().length;
-            visitCall(() -> super.visitMethodInsn(opcode, owner, name, desc, itf),
-                    contIndexOnStack);
-        }
-    }
-
-    @Override
-    public void visitMaxs(int maxStack, int maxLocals) {
+    void visitCodeEpilogue() {
         int contArg = (hasThis ? 1 : 0);
         super.visitLabel(ccTableSwitch);
         super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
@@ -139,7 +161,6 @@ public class Changer extends AnalyzerAdapter {
             super.visitInsn(Opcodes.ACONST_NULL);
             super.visitVarInsn(Opcodes.ASTORE, contArg);
             super.visitJumpInsn(Opcodes.GOTO, frame1);
-            super.visitMaxs(maxStack, maxLocals);
             return;
         }
         super.visitVarInsn(Opcodes.ALOAD, contArg);
@@ -255,7 +276,6 @@ public class Changer extends AnalyzerAdapter {
         // Dummy athrow of null. Control never reaches here.
         super.visitInsn(Opcodes.ACONST_NULL);
         super.visitInsn(Opcodes.ATHROW);
-        super.visitMaxs(maxStack, maxLocals);
     }
 
     Method getPopMethod(int sort) {

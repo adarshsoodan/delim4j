@@ -8,9 +8,6 @@ import dcc.util.BytesClassLoader;
 import java.io.PrintWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -58,9 +55,10 @@ public class TryAsmAPI {
             };
             invoker.run();
         }
-        Files.write(
-                Paths.get("C:\\Users\\user\\Desktop\\workspaces\\tmp\\DummyClass.class"),
-                b, StandardOpenOption.CREATE_NEW);
+
+//        Files.write(
+//                Paths.get("C:\\Users\\user\\Desktop\\workspaces\\tmp\\DummyClass.class"),
+//                b, StandardOpenOption.CREATE_NEW);
         {
             Runnable display = () -> {
                 ClassReader reader = new ClassReader(b);
