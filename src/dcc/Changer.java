@@ -104,7 +104,9 @@ public class Changer extends AnalyzerAdapter {
 
     boolean notContify(String name, String desc) {
         boolean ret = !annotationPresent;
-        ret = ret || !(desc.startsWith("(Ldcc/rt/Cont;"));
+        // TODO Type erasure of generics means Cont can be passed as Object in FunctionalInterface
+        ret = ret || !(desc.startsWith("(Ldcc/rt/Cont;")
+                || desc.startsWith("(Ljava/lang/Object;"));
         ret = ret || "<init>".equals(name) || "<clinit>".equals(name);
         ret = ret || stack.stream()
                 .anyMatch(v -> Opcodes.UNINITIALIZED_THIS.equals(v) || (v instanceof Label));
@@ -169,6 +171,7 @@ public class Changer extends AnalyzerAdapter {
         Arrays.setAll(tableLabels, (i) -> new Label());
 
         super.visitVarInsn(Opcodes.ALOAD, contArg);
+        super.visitTypeInsn(Opcodes.CHECKCAST, contDesc);
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,
                               contMethods.get("popJump").getName(),
                               contMethods.get("popJump").getDescriptor(), false);
@@ -186,6 +189,7 @@ public class Changer extends AnalyzerAdapter {
             // Copy cont reference as contArg is set null during restoration.
             int contCopy = localVars.length + stackVars.length;
             super.visitVarInsn(Opcodes.ALOAD, contArg);
+            super.visitTypeInsn(Opcodes.CHECKCAST, contDesc);
             super.visitVarInsn(Opcodes.ASTORE, contCopy);
             for (int j = 0; j < stackVars.length; ++j) {
                 Type t = stackVars[j];
@@ -273,6 +277,7 @@ public class Changer extends AnalyzerAdapter {
 
         super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
         super.visitVarInsn(Opcodes.ALOAD, contArg);
+        super.visitTypeInsn(Opcodes.CHECKCAST, contDesc);
 
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                               contDesc, contMethods.get("invalidCont").getName(),

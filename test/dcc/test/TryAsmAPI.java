@@ -2,15 +2,15 @@ package dcc.test;
 
 import dcc.ContClassVisitor;
 import dcc.rt.Cont;
-import dcc.rt.DccException;
+import dcc.rt.Contify;
 import dcc.test.data.DummyClass;
 import dcc.util.BytesClassLoader;
 import java.io.PrintWriter;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import org.junit.Test;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -35,27 +35,19 @@ public class TryAsmAPI {
                 try {
                     Class<?> c = (new BytesClassLoader()).fromBytes(className, b);
                     Object o = c.newInstance();
-                    Map<String, Method> ms = Arrays.stream(c.getDeclaredMethods())
-                            .collect(Collectors.toMap(m -> m.getName(), m -> m));
-                    Method m = ms.get("entry1");
-                    try {
-                        m.invoke(o, null, (Runnable) () -> {
-                             Cont cont = new Cont(() -> null);
-                             throw (new DccException(cont));
-                         });
-                    } catch (InvocationTargetException ite) {
-                        DccException de = (DccException) ite.getCause();
-                        Cont cont = de.getCont();
-                        Object ret = m.invoke(o, cont, null);
-                        System.out.println(ret);
-                    }
+                    BiFunction<Cont, Function<Cont, Object>, Object> entry1
+                            = (BiFunction<Cont, Function<Cont, Object>, Object>) o;
+                    System.out.println(
+                            Cont.startContext((@Contify Cont cont)
+                                    -> entry1.apply(cont,
+                                                    (@Contify Cont k)
+                                                    -> Cont.captureContext(k, r -> r.resume(6)))));
                 } catch (Exception ex) {
                     throw new RuntimeException(ex);
                 }
             };
             invoker.run();
         }
-
 //        Files.write(
 //                Paths.get("C:\\Users\\user\\Desktop\\workspaces\\tmp\\DummyClass.class"),
 //                b, StandardOpenOption.CREATE_NEW);
@@ -66,8 +58,7 @@ public class TryAsmAPI {
                 TraceClassVisitor tracer = new TraceClassVisitor(null, new Textifier(), printer);
                 reader.accept(tracer, ClassReader.EXPAND_FRAMES);
             };
-            display.run();
+//            display.run();
         }
     }
-
 }
