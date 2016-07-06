@@ -21,7 +21,7 @@ public class TryAsmAPI {
     public void profile() throws Exception {
         String className = DummyClass.class.getCanonicalName();
         ClassReader reader = new ClassReader(className);
-        for (int i = 0; i < 100000; ++i) {
+        for (int i = 0; i < 100 * 1000; ++i) {
             ClassWriter cw = new ClassWriter(0);
             ClassVisitor cv = new ContClassVisitor(cw);
             reader.accept(cv, ClassReader.EXPAND_FRAMES);

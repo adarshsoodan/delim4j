@@ -94,7 +94,7 @@ public class Changer extends AnalyzerAdapter {
 
     boolean notContify(String name, String desc) {
         boolean ret = !annotationPresent;
-        ret = ret || !(desc.startsWith("(Ldcc/rt/Cont;")
+        ret = ret || !(desc.startsWith("(Ldcc/rt/Context;")
                 || desc.startsWith("(Ljava/lang/Object;"));
         ret = ret || "<init>".equals(name) || "<clinit>".equals(name);
         ret = ret || stack.stream()
