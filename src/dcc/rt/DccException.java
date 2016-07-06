@@ -2,13 +2,13 @@ package dcc.rt;
 
 public class DccException extends RuntimeException {
 
-    Cont cont;
+    Context cont;
 
-    public DccException(final Cont cont) {
+    public DccException(final Context cont) {
         this.cont = cont;
     }
 
-    public Cont getCont() {
+    public Context getCont() {
         return cont;
     }
 }

@@ -2,26 +2,27 @@ package dcc.rt;
 
 import java.util.Arrays;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-public final class Cont implements Cloneable {
+public final class Context implements Cloneable {
 
-    public static final Object startContext(Function<Cont, Object> context) {
+    public static final Object start(Function<Context, Object> context) {
         try {
             return context.apply(null);
         } catch (DccException e) {
-            Cont cont = e.getCont();
+            Context cont = e.getCont();
             Resumable resumable = new Resumable(cont, context);
             Function<Resumable, Object> receiver = cont.receiver;
             return receiver.apply(resumable);
         }
     }
 
-    public static final Object captureContext(
-            Cont cont,
-            Function<Resumable, Object> receiver) {
+    public static final Object capture(Context cont,
+                                       Function<Resumable, Object> receiver) {
         if (cont == null) {
             // Start - capture the stack
-            throw new DccException(new Cont(receiver));
+            throw new DccException(new Context(receiver));
         } else {
             // Finish - resume the stack
             return cont.getSubstitution();
@@ -47,7 +48,7 @@ public final class Cont implements Cloneable {
     int posDouble;
     int posObject;
 
-    public Cont(Function<Resumable, Object> receiver) {
+    public Context(Function<Resumable, Object> receiver) {
         this.receiver = receiver;
         posJump = posInt = posFloat = posLong = posDouble = posObject = 0;
         jumps = new int[increment];
@@ -66,12 +67,12 @@ public final class Cont implements Cloneable {
         this.substitution = substitution;
     }
 
-    final public int popJump() {
+    public int popJump() {
         --posJump;
         return jumps[posJump];
     }
 
-    final public void pushJump(final int x) {
+    public void pushJump(final int x) {
         if (posJump == jumps.length) {
             jumps = Arrays.copyOf(jumps, jumps.length + increment);
         }
@@ -79,12 +80,12 @@ public final class Cont implements Cloneable {
         ++posJump;
     }
 
-    final public int popInt() {
+    public int popInt() {
         --posInt;
         return ints[posInt];
     }
 
-    final public void pushInt(final int x) {
+    public void pushInt(final int x) {
         if (posInt == ints.length) {
             ints = Arrays.copyOf(ints, ints.length + increment);
         }
@@ -92,12 +93,12 @@ public final class Cont implements Cloneable {
         ++posInt;
     }
 
-    final public float popFloat() {
+    public float popFloat() {
         --posFloat;
         return floats[posFloat];
     }
 
-    final public void pushFloat(final float x) {
+    public void pushFloat(final float x) {
         if (posFloat == floats.length) {
             floats = Arrays.copyOf(floats, floats.length + increment);
         }
@@ -105,12 +106,12 @@ public final class Cont implements Cloneable {
         ++posFloat;
     }
 
-    final public long popLong() {
+    public long popLong() {
         --posLong;
         return longs[posLong];
     }
 
-    final public void pushLong(final long x) {
+    public void pushLong(final long x) {
         if (posLong == longs.length) {
             longs = Arrays.copyOf(longs, longs.length + increment);
         }
@@ -118,12 +119,12 @@ public final class Cont implements Cloneable {
         ++posLong;
     }
 
-    final public double popDouble() {
+    public double popDouble() {
         --posDouble;
         return doubles[posDouble];
     }
 
-    final public void pushDouble(final double x) {
+    public void pushDouble(final double x) {
         if (posDouble == doubles.length) {
             doubles = Arrays.copyOf(doubles, doubles.length + increment);
         }
@@ -131,12 +132,12 @@ public final class Cont implements Cloneable {
         ++posDouble;
     }
 
-    final public Object popObject() {
+    public Object popObject() {
         --posObject;
         return objects[posObject];
     }
 
-    final public void pushObject(final Object o) {
+    public void pushObject(final Object o) {
         if (posObject == objects.length) {
             objects = Arrays.copyOf(objects, objects.length + increment);
         }
@@ -144,14 +145,14 @@ public final class Cont implements Cloneable {
         ++posObject;
     }
 
-    final public void invalidCont() {
+    public void invalidCont() {
         throw new RuntimeException("This is an invalid Cont - " + this);
     }
 
     @Override
-    final public Cont clone() {
+    public Context clone() {
         try {
-            return (Cont) super.clone();
+            return (Context) super.clone();
         } catch (CloneNotSupportedException ex) {
             throw new RuntimeException(ex);
         }

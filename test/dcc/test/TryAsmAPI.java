@@ -1,14 +1,10 @@
 package dcc.test;
 
 import dcc.ContClassVisitor;
-import dcc.rt.Cont;
-import dcc.rt.Contify;
+import dcc.rt.Context;
 import dcc.test.data.DummyClass;
 import dcc.util.BytesClassLoader;
 import java.io.PrintWriter;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import org.junit.Test;
@@ -17,8 +13,21 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceClassVisitor;
+import dcc.rt.Cc;
 
 public class TryAsmAPI {
+
+    @Test
+    public void profile() throws Exception {
+        String className = DummyClass.class.getCanonicalName();
+        ClassReader reader = new ClassReader(className);
+        for (int i = 0; i < 100000; ++i) {
+            ClassWriter cw = new ClassWriter(0);
+            ClassVisitor cv = new ContClassVisitor(cw);
+            reader.accept(cv, ClassReader.EXPAND_FRAMES);
+            cw.toByteArray();
+        }
+    }
 
     @Test
     public void verifyNonCont() throws Exception {
@@ -35,14 +44,17 @@ public class TryAsmAPI {
                 try {
                     Class<?> c = (new BytesClassLoader()).fromBytes(className, b);
                     Object o = c.newInstance();
-                    BiFunction<Cont, Function<Cont, Object>, Object> entry1
-                            = (BiFunction<Cont, Function<Cont, Object>, Object>) o;
+                    BiFunction<Context, Function<Context, Object>, Object> entry1
+                            = (BiFunction<Context, Function<Context, Object>, Object>) o;
                     System.out.println(
-                            Cont.startContext((@Contify Cont cont)
+                            Context.start(
+                                    (@Cc Context cont)
                                     -> entry1.apply(cont,
-                                                    (@Contify Cont k)
-                                                    -> Cont.captureContext(k, r -> r.resume(6)))));
-                } catch (Exception ex) {
+                                                    (@Cc Context k)
+                                                    -> Context.capture(k, r -> r.resume(6)))));
+                } catch (ClassNotFoundException |
+                         InstantiationException |
+                         IllegalAccessException ex) {
                     throw new RuntimeException(ex);
                 }
             };

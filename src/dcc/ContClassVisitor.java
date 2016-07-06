@@ -15,14 +15,14 @@ public class ContClassVisitor extends ClassVisitor {
 
     @Override
     public void visit(int version, int access, String name, String signature, String superName,
-            String[] interfaces) {
+                      String[] interfaces) {
         this.name = name;
-        super.visit(version, access, name, signature, superName, interfaces); //To change body of generated methods, choose Tools | Templates.
+        super.visit(version, access, name, signature, superName, interfaces);
     }
 
     @Override
     public MethodVisitor visitMethod(int access, String name, String desc, String signature,
-            String[] exceptions) {
+                                     String[] exceptions) {
         Type[] argTypes = Type.getArgumentTypes(desc);
         if ("<init>".equals(name) || "<clinit>".equals(name)
                 || argTypes.length == 0
@@ -31,7 +31,7 @@ public class ContClassVisitor extends ClassVisitor {
             return super.visitMethod(access, name, desc, signature, exceptions);
         } else {
             return new Changer(this.name, access, name, desc,
-                    super.visitMethod(access, name, desc, signature, exceptions));
+                               super.visitMethod(access, name, desc, signature, exceptions));
         }
     }
 

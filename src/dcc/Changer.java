@@ -1,6 +1,6 @@
 package dcc;
 
-import dcc.rt.Cont;
+import dcc.rt.Context;
 import dcc.rt.DccException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,8 +20,8 @@ import org.objectweb.asm.commons.Method;
 public class Changer extends AnalyzerAdapter {
 
     static final String dccException = "dcc/rt/DccException";
-    static final String contDesc = "dcc/rt/Cont";
-    static final String annotation = "Ldcc/rt/Contify;";
+    static final String contDesc = "dcc/rt/Context";
+    static final String annotation = "Ldcc/rt/Cc;";
 
     boolean annotationPresent = false;
 
@@ -41,17 +41,7 @@ public class Changer extends AnalyzerAdapter {
         super(Opcodes.ASM5, owner, access, name, desc, mv);
         frame0 = locals.toArray();
         hasThis = ((access & Opcodes.ACC_STATIC) == 0);
-        if (methodsLoaded.get() == false) {
-            Arrays.stream(Cont.class.getDeclaredMethods())
-                    .forEach(m -> contMethods.put(m.getName(), Method.getMethod(m)));
-            try {
-                getCont = Method.getMethod(DccException.class.getMethod("getCont"));
-                initException = Method.getMethod(DccException.class.getConstructor(Cont.class));
-            } catch (NoSuchMethodException | SecurityException ex) {
-                throw new RuntimeException(ex);
-            }
-            methodsLoaded.set(true);
-        }
+        initStatic();
     }
 
     @Override
@@ -104,7 +94,6 @@ public class Changer extends AnalyzerAdapter {
 
     boolean notContify(String name, String desc) {
         boolean ret = !annotationPresent;
-        // TODO Type erasure of generics means Cont can be passed as Object in FunctionalInterface
         ret = ret || !(desc.startsWith("(Ldcc/rt/Cont;")
                 || desc.startsWith("(Ljava/lang/Object;"));
         ret = ret || "<init>".equals(name) || "<clinit>".equals(name);
@@ -337,4 +326,17 @@ public class Changer extends AnalyzerAdapter {
         return contMethods.get(name);
     }
 
+    static void initStatic() {
+        if (methodsLoaded.get() == false) {
+            Arrays.stream(Context.class.getDeclaredMethods())
+                    .forEach(m -> contMethods.put(m.getName(), Method.getMethod(m)));
+            try {
+                getCont = Method.getMethod(DccException.class.getMethod("getCont"));
+                initException = Method.getMethod(DccException.class.getConstructor(Context.class));
+            } catch (NoSuchMethodException | SecurityException ex) {
+                throw new RuntimeException(ex);
+            }
+            methodsLoaded.set(true);
+        }
+    }
 }
