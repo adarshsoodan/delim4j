@@ -1,5 +1,6 @@
 package dcc;
 
+import dcc.rt.Context;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -24,7 +25,7 @@ public class ContClassVisitor extends ClassVisitor {
                                      String[] exceptions) {
 //        Type[] argTypes = Type.getArgumentTypes(desc);
         if ("<init>".equals(name) || "<clinit>".equals(name)
-                || !desc.startsWith("(Ldcc/rt/Context;")) {
+                || !desc.startsWith(Context.argDesc)) {
             return super.visitMethod(access, name, desc, signature, exceptions);
         }
 //                || argTypes.length == 0

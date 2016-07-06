@@ -5,11 +5,14 @@ import java.util.function.Function;
 
 public final class Context implements Cloneable {
 
+    public static final String desc = "dcc/rt/Context";
+    public static final String argDesc = "(L" + desc + ";";
+
     public static final Object start(Function<Context, Object> context) {
         try {
             return context.apply(null);
         } catch (DccException e) {
-            Context cont = e.getCont();
+            Context cont = e.getContext();
             Resumable resumable = new Resumable(cont, context);
             Function<Resumable, Object> receiver = cont.receiver;
             return receiver.apply(resumable);

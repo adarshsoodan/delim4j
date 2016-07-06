@@ -11,4 +11,6 @@ import java.lang.annotation.Target;
 @Target(ElementType.PARAMETER)
 public @interface Cc {
 
+    public static final String annotationDesc = "Ldcc/rt/Cc;";
+
 }

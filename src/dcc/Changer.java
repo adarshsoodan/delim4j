@@ -1,5 +1,6 @@
 package dcc;
 
+import dcc.rt.Cc;
 import dcc.rt.Context;
 import dcc.rt.DccException;
 import java.util.ArrayList;
@@ -19,15 +20,11 @@ import org.objectweb.asm.commons.Method;
 
 public class Changer extends AnalyzerAdapter {
 
-    static final String dccException = "dcc/rt/DccException";
-    static final String contDesc = "dcc/rt/Context";
-    static final String annotation = "Ldcc/rt/Cc;";
-
     boolean annotationPresent = false;
 
     static final AtomicBoolean methodsLoaded = new AtomicBoolean(false);
     static Map<String, Method> contMethods = new HashMap<>();
-    static Method getCont;
+    static Method getContext;
     static Method initException;
 
     Object[] frame0;
@@ -46,7 +43,7 @@ public class Changer extends AnalyzerAdapter {
 
     @Override
     public AnnotationVisitor visitParameterAnnotation(int parameter, String desc, boolean visible) {
-        if (parameter == 0 && annotation.equals(desc)) {
+        if (parameter == 0 && Cc.annotationDesc.equals(desc)) {
             annotationPresent = true;
         }
         return super.visitParameterAnnotation(parameter, desc, visible);
@@ -94,7 +91,7 @@ public class Changer extends AnalyzerAdapter {
 
     boolean notContify(String name, String desc) {
         boolean ret = !annotationPresent;
-        ret = ret || !(desc.startsWith("(Ldcc/rt/Context;")
+        ret = ret || !(desc.startsWith(Context.argDesc)
                 || desc.startsWith("(Ljava/lang/Object;"));
         ret = ret || "<init>".equals(name) || "<clinit>".equals(name);
         ret = ret || stack.stream()
@@ -115,7 +112,7 @@ public class Changer extends AnalyzerAdapter {
         Label start = new Label();
         Label end = new Label();
         Label handler = new Label();
-        super.visitTryCatchBlock(start, end, handler, dccException);
+        super.visitTryCatchBlock(start, end, handler, DccException.desc);
 
         // POPs to localvars.
         for (int i = callStack.length - 1; i >= 0; --i) {
@@ -160,8 +157,8 @@ public class Changer extends AnalyzerAdapter {
         Arrays.setAll(tableLabels, (i) -> new Label());
 
         super.visitVarInsn(Opcodes.ALOAD, contArg);
-        super.visitTypeInsn(Opcodes.CHECKCAST, contDesc);
-        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,
+        super.visitTypeInsn(Opcodes.CHECKCAST, Context.desc);
+        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc,
                               contMethods.get("popJump").getName(),
                               contMethods.get("popJump").getDescriptor(), false);
         super.visitTableSwitchInsn(0, tableLabels.length - 1, defaultLabel, tableLabels);
@@ -178,7 +175,7 @@ public class Changer extends AnalyzerAdapter {
             // Copy cont reference as contArg is set null during restoration.
             int contCopy = localVars.length + stackVars.length;
             super.visitVarInsn(Opcodes.ALOAD, contArg);
-            super.visitTypeInsn(Opcodes.CHECKCAST, contDesc);
+            super.visitTypeInsn(Opcodes.CHECKCAST, Context.desc);
             super.visitVarInsn(Opcodes.ASTORE, contCopy);
             for (int j = 0; j < stackVars.length; ++j) {
                 Object t = stackVars[j];
@@ -187,8 +184,8 @@ public class Changer extends AnalyzerAdapter {
                 }
                 Method pop = getPopMethod(t);
                 super.visitVarInsn(Opcodes.ALOAD, contCopy);
-                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
-                                      contDesc, pop.getName(), pop.getDescriptor(), false);
+                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, pop.getName(), pop.
+                                      getDescriptor(), false);
                 if (j == contIndexOnStack) {
                     super.visitInsn(Opcodes.POP);
                     super.visitVarInsn(Opcodes.ALOAD, contCopy);
@@ -209,8 +206,8 @@ public class Changer extends AnalyzerAdapter {
                 }
                 Method pop = getPopMethod(t);
                 super.visitVarInsn(Opcodes.ALOAD, contCopy);
-                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
-                                      contDesc, pop.getName(), pop.getDescriptor(), false);
+                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, pop.getName(), pop.
+                                      getDescriptor(), false);
                 if (t instanceof String) {
                     super.visitTypeInsn(Opcodes.CHECKCAST, (String) t);
                 }
@@ -224,10 +221,10 @@ public class Changer extends AnalyzerAdapter {
             // Handler
             super.visitLabel(handler);
             super.visitFrame(Opcodes.F_NEW,
-                             handlerFrame.length, handlerFrame, 1, new Object[]{dccException});
+                             handlerFrame.length, handlerFrame, 1, new Object[]{DccException.desc});
             // Get Cont from exception.
-            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, dccException,
-                                  getCont.getName(), getCont.getDescriptor(), false);
+            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, DccException.desc,
+                                  getContext.getName(), getContext.getDescriptor(), false);
             // Order of local vars - Push index 0 last.
             for (int j = localVars.length - 1; j >= 0; --j) {
                 Object t = localVars[j];
@@ -237,7 +234,7 @@ public class Changer extends AnalyzerAdapter {
                 super.visitInsn(Opcodes.DUP);
                 super.visitVarInsn(getLoadOpcode(t), j);
                 Method push = getPushMethod(t);
-                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,
+                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc,
                                       push.getName(), push.getDescriptor(), false);
             }
             // Order of stack - Push end of array into Cont first. Index 0 gets pushed last.
@@ -249,19 +246,19 @@ public class Changer extends AnalyzerAdapter {
                 super.visitInsn(Opcodes.DUP);
                 super.visitVarInsn(getLoadOpcode(t), localVars.length + j);
                 Method push = getPushMethod(t);
-                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,
+                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc,
                                       push.getName(), push.getDescriptor(), false);
             }
             super.visitInsn(Opcodes.DUP);
             super.visitLdcInsn(i);
-            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,
+            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc,
                                   contMethods.get("pushJump").getName(),
                                   contMethods.get("pushJump").getDescriptor(), false);
             // Create new exception. Cont object is on stack.
-            mv.visitTypeInsn(Opcodes.NEW, dccException);
+            mv.visitTypeInsn(Opcodes.NEW, DccException.desc);
             mv.visitInsn(Opcodes.DUP_X1);
             mv.visitInsn(Opcodes.SWAP);
-            mv.visitMethodInsn(Opcodes.INVOKESPECIAL, dccException,
+            mv.visitMethodInsn(Opcodes.INVOKESPECIAL, DccException.desc,
                                initException.getName(), initException.getDescriptor(), false);
             super.visitInsn(Opcodes.ATHROW);
         }
@@ -270,10 +267,10 @@ public class Changer extends AnalyzerAdapter {
 
         super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
         super.visitVarInsn(Opcodes.ALOAD, contArg);
-        super.visitTypeInsn(Opcodes.CHECKCAST, contDesc);
+        super.visitTypeInsn(Opcodes.CHECKCAST, Context.desc);
 
-        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
-                              contDesc, contMethods.get("invalidCont").getName(),
+        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, contMethods.get("invalidCont").
+                              getName(),
                               contMethods.get("invalidCont").getDescriptor(), false);
         // Dummy athrow of null. Control never reaches here.
         super.visitInsn(Opcodes.ACONST_NULL);
@@ -353,7 +350,7 @@ public class Changer extends AnalyzerAdapter {
             Arrays.stream(Context.class.getDeclaredMethods())
                     .forEach(m -> contMethods.put(m.getName(), Method.getMethod(m)));
             try {
-                getCont = Method.getMethod(DccException.class.getMethod("getCont"));
+                getContext = Method.getMethod(DccException.class.getMethod("getContext"));
                 initException = Method.getMethod(DccException.class.getConstructor(Context.class));
             } catch (NoSuchMethodException | SecurityException ex) {
                 throw new RuntimeException(ex);
