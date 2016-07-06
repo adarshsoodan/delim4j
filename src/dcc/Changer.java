@@ -111,8 +111,6 @@ public class Changer extends AnalyzerAdapter {
 
         Object[] handlerFrame = Arrays.copyOf(callLocals, callLocals.length + callStack.length);
         System.arraycopy(callStack, 0, handlerFrame, callLocals.length, callStack.length);
-        Type[] localTypes = FrameT.fromFrame(callLocals);
-        Type[] stackTypes = FrameT.fromFrame(callStack);
 
         Label start = new Label();
         Label end = new Label();
@@ -120,18 +118,20 @@ public class Changer extends AnalyzerAdapter {
         super.visitTryCatchBlock(start, end, handler, dccException);
 
         // POPs to localvars.
-        for (int i = stackTypes.length - 1; i >= 0; --i) {
-            Type t = stackTypes[i];
-            if (t != null) {
-                super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), callLocals.length + i);
+        for (int i = callStack.length - 1; i >= 0; --i) {
+            Object t = callStack[i];
+            if (Opcodes.TOP.equals(t)) {
+                continue;
             }
+            super.visitVarInsn(getStoreOpcode(t), callLocals.length + i);
         }
         // PUSHs from local vars in reverse order.
-        for (int i = 0; i < stackTypes.length; ++i) {
-            Type t = stackTypes[i];
-            if (t != null) {
-                super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), callLocals.length + i);
+        for (int i = 0; i < callStack.length; ++i) {
+            Object t = callStack[i];
+            if (Opcodes.TOP.equals(t)) {
+                continue;
             }
+            super.visitVarInsn(getLoadOpcode(t), callLocals.length + i);
         }
         super.visitLabel(start);
         super.visitFrame(Opcodes.F_NEW,
@@ -139,7 +139,7 @@ public class Changer extends AnalyzerAdapter {
         action.run();
         super.visitLabel(end);
 
-        callWrapInfo.add(new CallWrapInfo(start, stackTypes, localTypes,
+        callWrapInfo.add(new CallWrapInfo(start, callStack, callLocals,
                                           handler, handlerFrame, contIndexOnStack));
     }
 
@@ -170,8 +170,8 @@ public class Changer extends AnalyzerAdapter {
             super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
             CallWrapInfo cwi = callWrapInfo.get(i);
             Label start = cwi.callStart;
-            Type[] stackVars = cwi.getStack();
-            Type[] localVars = cwi.getLocals();
+            Object[] stackVars = cwi.getStack();
+            Object[] localVars = cwi.getLocals();
             Label handler = cwi.getHandler();
             Object[] handlerFrame = cwi.getHandlerFrame();
             int contIndexOnStack = cwi.getContIndexOnStack();
@@ -181,38 +181,40 @@ public class Changer extends AnalyzerAdapter {
             super.visitTypeInsn(Opcodes.CHECKCAST, contDesc);
             super.visitVarInsn(Opcodes.ASTORE, contCopy);
             for (int j = 0; j < stackVars.length; ++j) {
-                Type t = stackVars[j];
-                if (t != null) {
-                    Method pop = getPopMethod(t.getSort());
+                Object t = stackVars[j];
+                if (Opcodes.TOP.equals(t)) {
+                    continue;
+                }
+                Method pop = getPopMethod(t);
+                super.visitVarInsn(Opcodes.ALOAD, contCopy);
+                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                                      contDesc, pop.getName(), pop.getDescriptor(), false);
+                if (j == contIndexOnStack) {
+                    super.visitInsn(Opcodes.POP);
                     super.visitVarInsn(Opcodes.ALOAD, contCopy);
-                    super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
-                                          contDesc, pop.getName(), pop.getDescriptor(), false);
-                    if (j == contIndexOnStack) {
-                        super.visitInsn(Opcodes.POP);
-                        super.visitVarInsn(Opcodes.ALOAD, contCopy);
-                        super.visitInsn(Opcodes.ACONST_NULL);
-                        super.visitVarInsn(Opcodes.ASTORE, localVars.length + j);
-                    } else {
-                        if (t.getSort() == Type.OBJECT || t.getSort() == Type.ARRAY) {
-                            super.visitTypeInsn(Opcodes.CHECKCAST, t.getInternalName());
-                        }
-                        super.visitInsn(Opcodes.DUP);
-                        super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), localVars.length + j);
+                    super.visitInsn(Opcodes.ACONST_NULL);
+                    super.visitVarInsn(Opcodes.ASTORE, localVars.length + j);
+                } else {
+                    if (t instanceof String) {
+                        super.visitTypeInsn(Opcodes.CHECKCAST, (String) t);
                     }
+                    super.visitInsn(Opcodes.DUP);
+                    super.visitVarInsn(getStoreOpcode(t), localVars.length + j);
                 }
             }
             for (int j = 0; j < localVars.length; ++j) {
-                Type t = localVars[j];
-                if (t != null) {
-                    Method pop = getPopMethod(t.getSort());
-                    super.visitVarInsn(Opcodes.ALOAD, contCopy);
-                    super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
-                                          contDesc, pop.getName(), pop.getDescriptor(), false);
-                    if (t.getSort() == Type.OBJECT || t.getSort() == Type.ARRAY) {
-                        super.visitTypeInsn(Opcodes.CHECKCAST, t.getInternalName());
-                    }
-                    super.visitVarInsn(t.getOpcode(Opcodes.ISTORE), j);
+                Object t = localVars[j];
+                if (Opcodes.TOP.equals(t)) {
+                    continue;
                 }
+                Method pop = getPopMethod(t);
+                super.visitVarInsn(Opcodes.ALOAD, contCopy);
+                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                                      contDesc, pop.getName(), pop.getDescriptor(), false);
+                if (t instanceof String) {
+                    super.visitTypeInsn(Opcodes.CHECKCAST, (String) t);
+                }
+                super.visitVarInsn(getStoreOpcode(t), j);
             }
             // Set current cont arg as null to avoid capturing it in next continuation.
             super.visitInsn(Opcodes.ACONST_NULL);
@@ -228,25 +230,27 @@ public class Changer extends AnalyzerAdapter {
                                   getCont.getName(), getCont.getDescriptor(), false);
             // Order of local vars - Push index 0 last.
             for (int j = localVars.length - 1; j >= 0; --j) {
-                Type t = localVars[j];
-                if (t != null) {
-                    super.visitInsn(Opcodes.DUP);
-                    super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), j);
-                    Method push = getPushMethod(localVars[j].getSort());
-                    super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,
-                                          push.getName(), push.getDescriptor(), false);
+                Object t = localVars[j];
+                if (Opcodes.TOP.equals(t)) {
+                    continue;
                 }
+                super.visitInsn(Opcodes.DUP);
+                super.visitVarInsn(getLoadOpcode(t), j);
+                Method push = getPushMethod(t);
+                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,
+                                      push.getName(), push.getDescriptor(), false);
             }
             // Order of stack - Push end of array into Cont first. Index 0 gets pushed last.
             for (int j = stackVars.length - 1; j >= 0; --j) {
-                Type t = stackVars[j];
-                if (t != null) {
-                    super.visitInsn(Opcodes.DUP);
-                    super.visitVarInsn(t.getOpcode(Opcodes.ILOAD), localVars.length + j);
-                    Method push = getPushMethod(stackVars[j].getSort());
-                    super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,
-                                          push.getName(), push.getDescriptor(), false);
+                Object t = stackVars[j];
+                if (Opcodes.TOP.equals(t)) {
+                    continue;
                 }
+                super.visitInsn(Opcodes.DUP);
+                super.visitVarInsn(getLoadOpcode(t), localVars.length + j);
+                Method push = getPushMethod(t);
+                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, contDesc,
+                                      push.getName(), push.getDescriptor(), false);
             }
             super.visitInsn(Opcodes.DUP);
             super.visitLdcInsn(i);
@@ -276,54 +280,72 @@ public class Changer extends AnalyzerAdapter {
         super.visitInsn(Opcodes.ATHROW);
     }
 
-    Method getPopMethod(int sort) {
+    Method getPopMethod(Object t) {
         String name;
-        switch (sort) {
-            case Type.INT:
-                name = "popInt";
-                break;
-            case Type.FLOAT:
-                name = "popFloat";
-                break;
-            case Type.LONG:
-                name = "popLong";
-                break;
-            case Type.DOUBLE:
-                name = "popDouble";
-                break;
-            case Type.OBJECT:
-            case Type.ARRAY:
-                name = "popObject";
-                break;
-            default:
-                throw new RuntimeException("Unknown Sort -> " + sort);
+        if (t.equals(Opcodes.INTEGER)) {
+            name = "popInt";
+        } else if (t.equals(Opcodes.FLOAT)) {
+            name = "popFloat";
+        } else if (t.equals(Opcodes.LONG)) {
+            name = "popLong";
+        } else if (t.equals(Opcodes.DOUBLE)) {
+            name = "popDouble";
+        } else if (t instanceof String) {
+            name = "popObject";
+        } else {
+            throw new RuntimeException("Unknown, top or uninitialized type " + t);
         }
         return contMethods.get(name);
     }
 
-    Method getPushMethod(int sort) {
+    Method getPushMethod(Object t) {
         String name;
-        switch (sort) {
-            case Type.INT:
-                name = "pushInt";
-                break;
-            case Type.FLOAT:
-                name = "pushFloat";
-                break;
-            case Type.LONG:
-                name = "pushLong";
-                break;
-            case Type.DOUBLE:
-                name = "pushDouble";
-                break;
-            case Type.OBJECT:
-            case Type.ARRAY:
-                name = "pushObject";
-                break;
-            default:
-                throw new RuntimeException("Unknown Sort -> " + sort);
+        if (t.equals(Opcodes.INTEGER)) {
+            name = "pushInt";
+        } else if (t.equals(Opcodes.FLOAT)) {
+            name = "pushFloat";
+        } else if (t.equals(Opcodes.LONG)) {
+            name = "pushLong";
+        } else if (t.equals(Opcodes.DOUBLE)) {
+            name = "pushDouble";
+        } else if (t instanceof String) {
+            name = "pushObject";
+        } else {
+            throw new RuntimeException("Unknown, top or uninitialized type " + t);
         }
         return contMethods.get(name);
+    }
+
+    int getStoreOpcode(Object t) {
+        if (t.equals(Opcodes.INTEGER)) {
+            return Opcodes.ISTORE;
+        } else if (t.equals(Opcodes.FLOAT)) {
+            return Opcodes.FSTORE;
+        } else if (t.equals(Opcodes.LONG)) {
+            return Opcodes.LSTORE;
+        } else if (t.equals(Opcodes.DOUBLE)) {
+            return Opcodes.DSTORE;
+        } else if (t instanceof String) {
+            return Opcodes.ASTORE;
+        } else {
+            throw new RuntimeException("Unknown, top or uninitialized type " + t);
+        }
+    }
+
+    int getLoadOpcode(Object t) {
+        if (t.equals(Opcodes.INTEGER)) {
+            return Opcodes.ILOAD;
+        } else if (t.equals(Opcodes.FLOAT)) {
+            return Opcodes.FLOAD;
+        } else if (t.equals(Opcodes.LONG)) {
+            return Opcodes.LLOAD;
+        } else if (t.equals(Opcodes.DOUBLE)) {
+            return Opcodes.DLOAD;
+        } else if (t instanceof String) {
+            return Opcodes.ALOAD;
+        } else {
+            throw new RuntimeException("Unknown, top or uninitialized type " + t);
+        }
     }
 
     static void initStatic() {

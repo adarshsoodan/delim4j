@@ -1,19 +1,18 @@
 package dcc;
 
 import org.objectweb.asm.Label;
-import org.objectweb.asm.Type;
 
 public class CallWrapInfo {
 
     Label callStart;
-    Type[] stack;
-    Type[] locals;
+    Object[] stack;
+    Object[] locals;
     Label handler;
     Object[] handlerFrame;
     int contIndexOnStack;
 
-    public CallWrapInfo(Label callStart, Type[] stack, Type[] locals, Label handler,
-            Object[] handlerFrame, int contIndexOnStack) {
+    public CallWrapInfo(Label callStart, Object[] stack, Object[] locals, Label handler,
+                        Object[] handlerFrame, int contIndexOnStack) {
         this.callStart = callStart;
         this.stack = stack;
         this.locals = locals;
@@ -26,11 +25,11 @@ public class CallWrapInfo {
         return callStart;
     }
 
-    public Type[] getStack() {
+    public Object[] getStack() {
         return stack;
     }
 
-    public Type[] getLocals() {
+    public Object[] getLocals() {
         return locals;
     }
 
