@@ -1,4 +1,4 @@
-package dcc.test.data;
+package dcc.test;
 
 import dcc.rt.Context;
 import java.util.function.BiFunction;

@@ -2,7 +2,6 @@ package dcc.test;
 
 import dcc.ContClassVisitor;
 import dcc.rt.Context;
-import dcc.test.data.DummyClass;
 import dcc.util.BytesClassLoader;
 import java.io.PrintWriter;
 import java.util.function.BiFunction;
