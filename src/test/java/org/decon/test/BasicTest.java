@@ -64,8 +64,8 @@ public class BasicTest {
                             throw new RuntimeException(ex);
                         }
                     };
-            invoker.apply(r -> r.resume("r.resume()"), -1);
             invoker.apply(r -> 6, 6);
+            invoker.apply(r -> r.resume("r.resume()"), -1);
         }
 //        Files.write(
 //                Paths.get("C:\\Users\\user\\Desktop\\workspaces\\tmp\\DummyClass.class"),
