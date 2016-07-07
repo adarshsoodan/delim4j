@@ -13,6 +13,8 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceClassVisitor;
 import org.decon.rt.Cc;
+import org.decon.rt.Resumable;
+import org.junit.Assert;
 
 public class BasicTest {
 
@@ -39,27 +41,31 @@ public class BasicTest {
         }
         byte[] b = cw.toByteArray();
         {
-            Runnable invoker = () -> {
-                try {
-                    Class<?> c = (new BytesClassLoader()).fromBytes(className, b);
-                    Object o = c.newInstance();
-                    BiFunction<Context, Function<Context, Object>, Object> entry1
+            BiFunction<Function<Resumable, Object>, Object, Object> invoker
+                    = (f, equalObject) -> {
+                        try {
+                            Class<?> c = (new BytesClassLoader()).fromBytes(className, b);
+                            Object o = c.newInstance();
+                            BiFunction<Context, Function<Context, Object>, Object> entry1
                             = (BiFunction<Context, Function<Context, Object>, Object>) o;
-                    System.out.println(
-                            Context.start(
+
+                            Object ret
+                            = Context.start(
                                     (@Cc Context cont)
                                     -> entry1.apply(
                                             cont,
                                             (@Cc Context k)
-                                            -> Context.capture(k,
-                                                               r -> r.resume("r.resume()")))));
-                } catch (ClassNotFoundException |
-                         InstantiationException |
-                         IllegalAccessException ex) {
-                    throw new RuntimeException(ex);
-                }
-            };
-            invoker.run();
+                                            -> Context.capture(k, f)));
+                            Assert.assertEquals(equalObject, ret);
+                            return ret;
+                        } catch (ClassNotFoundException |
+                                 InstantiationException |
+                                 IllegalAccessException ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    };
+            invoker.apply(r -> r.resume("r.resume()"), -1);
+            invoker.apply(r -> 6, 6);
         }
 //        Files.write(
 //                Paths.get("C:\\Users\\user\\Desktop\\workspaces\\tmp\\DummyClass.class"),
