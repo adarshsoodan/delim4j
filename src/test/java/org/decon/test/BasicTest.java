@@ -14,7 +14,7 @@ import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceClassVisitor;
 import org.decon.rt.Cc;
 
-public class TryAsmAPI {
+public class BasicTest {
 
 //    @Test
     public void profile() throws Exception {
