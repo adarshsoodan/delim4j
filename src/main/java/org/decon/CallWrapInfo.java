@@ -1,15 +1,15 @@
-package dcc;
+package org.decon;
 
 import org.objectweb.asm.Label;
 
 public class CallWrapInfo {
 
-    Label callStart;
-    Object[] stack;
-    Object[] locals;
-    Label handler;
-    Object[] handlerFrame;
-    int contIndexOnStack;
+    private Label callStart;
+    private Object[] stack;
+    private Object[] locals;
+    private Label handler;
+    private Object[] handlerFrame;
+    private int contIndexOnStack;
 
     public CallWrapInfo(Label callStart, Object[] stack, Object[] locals, Label handler,
                         Object[] handlerFrame, int contIndexOnStack) {

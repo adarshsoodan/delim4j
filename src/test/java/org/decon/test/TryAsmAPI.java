@@ -1,8 +1,8 @@
-package dcc.test;
+package org.decon.test;
 
-import dcc.ContClassVisitor;
-import dcc.rt.Context;
-import dcc.util.BytesClassLoader;
+import org.decon.ContClassVisitor;
+import org.decon.rt.Context;
+import org.decon.util.BytesClassLoader;
 import java.io.PrintWriter;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -12,15 +12,15 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceClassVisitor;
-import dcc.rt.Cc;
+import org.decon.rt.Cc;
 
 public class TryAsmAPI {
 
-    @Test
+//    @Test
     public void profile() throws Exception {
         String className = DummyClass.class.getCanonicalName();
         ClassReader reader = new ClassReader(className);
-        for (int i = 0; i < 100 * 1000; ++i) {
+        for (int i = 0; i < 10 * 1000; ++i) {
             ClassWriter cw = new ClassWriter(0);
             ClassVisitor cv = new ContClassVisitor(cw);
             reader.accept(cv, ClassReader.EXPAND_FRAMES);
@@ -48,9 +48,11 @@ public class TryAsmAPI {
                     System.out.println(
                             Context.start(
                                     (@Cc Context cont)
-                                    -> entry1.apply(cont,
-                                                    (@Cc Context k)
-                                                    -> Context.capture(k, r -> r.resume(6)))));
+                                    -> entry1.apply(
+                                            cont,
+                                            (@Cc Context k)
+                                            -> Context.capture(k,
+                                                               r -> r.resume("r.resume()")))));
                 } catch (ClassNotFoundException |
                          InstantiationException |
                          IllegalAccessException ex) {

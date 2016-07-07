@@ -1,8 +1,8 @@
-package dcc;
+package org.decon;
 
-import dcc.rt.Cc;
-import dcc.rt.Context;
-import dcc.rt.DccException;
+import org.decon.rt.Cc;
+import org.decon.rt.Context;
+import org.decon.rt.DccException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -166,7 +166,7 @@ public class Changer extends AnalyzerAdapter {
             super.visitLabel(tableLabels[i]);
             super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[]{});
             CallWrapInfo cwi = callWrapInfo.get(i);
-            Label start = cwi.callStart;
+            Label start = cwi.getCallStart();
             Object[] stackVars = cwi.getStack();
             Object[] localVars = cwi.getLocals();
             Label handler = cwi.getHandler();

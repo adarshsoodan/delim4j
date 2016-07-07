@@ -1,4 +1,4 @@
-package dcc.rt;
+package org.decon.rt;
 
 public class DccException extends RuntimeException {
 

@@ -1,4 +1,4 @@
-package dcc.util;
+package org.decon.util;
 
 public class BytesClassLoader extends ClassLoader {
 

@@ -1,4 +1,4 @@
-package dcc.rt;
+package org.decon.rt;
 
 import java.util.Arrays;
 import java.util.function.Function;

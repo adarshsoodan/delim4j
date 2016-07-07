@@ -1,9 +1,9 @@
-package dcc.test;
+package org.decon.test;
 
-import dcc.rt.Context;
+import org.decon.rt.Context;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import dcc.rt.Cc;
+import org.decon.rt.Cc;
 
 public class DummyClass implements BiFunction<Context, Function<Context, Object>, Object> {
 

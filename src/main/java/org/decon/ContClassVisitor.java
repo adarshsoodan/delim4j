@@ -1,6 +1,7 @@
-package dcc;
+package org.decon;
 
-import dcc.rt.Context;
+import org.decon.Changer;
+import org.decon.rt.Context;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
