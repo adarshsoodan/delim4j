@@ -6,7 +6,7 @@ public class DccException extends RuntimeException {
 
     public static final String desc = Type.getInternalName(DccException.class);
 
-    Context context;
+    private final Context context;
 
     public DccException(final Context context) {
         super(null, null, false, false);

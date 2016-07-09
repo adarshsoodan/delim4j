@@ -31,24 +31,24 @@ public final class Context implements Cloneable {
         }
     }
 
-    static final int increment = 16;
-    Function<Resumable, Object> receiver;
-    Object substitution;
+    private static final int increment = 16;
+    private final Function<Resumable, Object> receiver;
+    private Object substitution;
 
-    int[] jumps;
-    int[] ints;
-    float[] floats;
-    long[] longs;
-    double[] doubles;
-    Object[] objects;
+    private int[] jumps;
+    private int[] ints;
+    private float[] floats;
+    private long[] longs;
+    private double[] doubles;
+    private Object[] objects;
 
-    int posJump;
+    private int posJump;
 
-    int posInt;
-    int posFloat;
-    int posLong;
-    int posDouble;
-    int posObject;
+    private int posInt;
+    private int posFloat;
+    private int posLong;
+    private int posDouble;
+    private int posObject;
 
     public Context(Function<Resumable, Object> receiver) {
         this.receiver = receiver;
