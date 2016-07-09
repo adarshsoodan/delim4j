@@ -8,8 +8,7 @@ import org.decon.rt.Cc;
 public class DummyClass implements BiFunction<Context, Function<Context, Object>, Object> {
 
     public Object entry1(@Cc Context cont, Function<Context, Object> action) {
-        middle1(cont, action);
-        return Integer.parseInt("-1");
+        return middle1(cont, action);
     }
 
     public Object middle1(@Cc Context cont, Function<Context, Object> action) {

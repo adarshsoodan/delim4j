@@ -42,10 +42,11 @@ public class BasicTest {
         byte[] b = cw.toByteArray();
         {
             BiFunction<Function<Resumable, Object>, Object, Object> invoker
-                    = (f, expected) -> {
+                    = (receiver, expected) -> {
                         try {
                             Class<?> c = (new BytesClassLoader()).fromBytes(className, b);
                             Object o = c.newInstance();
+                            o = new DummyClass();
                             BiFunction<Context, Function<Context, Object>, Object> entry1
                             = (BiFunction<Context, Function<Context, Object>, Object>) o;
 
@@ -55,7 +56,7 @@ public class BasicTest {
                                     -> entry1.apply(
                                             cont,
                                             (@Cc Context k)
-                                            -> Context.capture(k, f)));
+                                            -> Context.capture(k, receiver)));
                             Assert.assertEquals(expected, ret);
                             return ret;
                         } catch (ClassNotFoundException |
@@ -65,7 +66,7 @@ public class BasicTest {
                         }
                     };
             invoker.apply(r -> 6, 6);
-            invoker.apply(r -> r.resume("r.resume()"), -1);
+            invoker.apply(r -> r.resume(-1), -1);
         }
 //        Files.write(
 //                Paths.get("C:\\Users\\user\\Desktop\\workspaces\\tmp\\DummyClass.class"),

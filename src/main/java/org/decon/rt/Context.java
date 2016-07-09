@@ -11,13 +11,13 @@ public final class Context implements Cloneable, Serializable {
     public static final String desc = Type.getInternalName(Context.class);
     public static final String argDesc = "(L" + desc + ";";
 
-    public static final Object start(Function<Context, Object> context) {
+    public static final Object start(Function<Context, Object> frames) {
         try {
-            return context.apply(null);
+            return frames.apply(null);
         } catch (DccException e) {
-            Context cont = e.getContext();
-            Resumable resumable = new Resumable(cont, context);
-            Function<Resumable, Object> receiver = cont.receiver;
+            Context context = e.getContext();
+            Resumable resumable = new Resumable(context, frames);
+            Function<Resumable, Object> receiver = context.receiver;
             return receiver.apply(resumable);
         }
     }
