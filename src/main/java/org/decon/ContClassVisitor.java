@@ -1,6 +1,5 @@
 package org.decon;
 
-import org.decon.Changer;
 import org.decon.rt.Context;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;

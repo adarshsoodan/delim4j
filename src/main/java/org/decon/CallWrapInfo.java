@@ -4,12 +4,12 @@ import org.objectweb.asm.Label;
 
 public class CallWrapInfo {
 
-    private Label callStart;
-    private Object[] stack;
-    private Object[] locals;
-    private Label handler;
-    private Object[] handlerFrame;
-    private int contIndexOnStack;
+    private final Label callStart;
+    private final Object[] stack;
+    private final Object[] locals;
+    private final Label handler;
+    private final Object[] handlerFrame;
+    private final int contIndexOnStack;
 
     public CallWrapInfo(Label callStart, Object[] stack, Object[] locals, Label handler,
                         Object[] handlerFrame, int contIndexOnStack) {

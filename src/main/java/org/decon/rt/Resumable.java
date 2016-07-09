@@ -4,18 +4,18 @@ import java.util.function.Function;
 
 public class Resumable {
 
-    Context cont;
-    Function<Context, Object> context;
+    private final Context context;
+    private final Function<Context, Object> replacement;
 
     public Object resume(Object o) {
-        Context cloned = cont.clone();
+        Context cloned = context.clone();
         cloned.setSubstitution(o);
-        return context.apply(cloned);
+        return replacement.apply(cloned);
     }
 
-    public Resumable(Context cont, Function<Context, Object> context) {
-        this.cont = cont;
+    public Resumable(Context context, Function<Context, Object> replacement) {
         this.context = context;
+        this.replacement = replacement;
     }
 
 }

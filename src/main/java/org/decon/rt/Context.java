@@ -1,11 +1,13 @@
 package org.decon.rt;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.function.Function;
 import org.objectweb.asm.Type;
 
-public final class Context implements Cloneable {
+public final class Context implements Cloneable, Serializable {
 
+    public static final long serialVersionUID = 1;
     public static final String desc = Type.getInternalName(Context.class);
     public static final String argDesc = "(L" + desc + ";";
 
@@ -32,7 +34,7 @@ public final class Context implements Cloneable {
     }
 
     private static final int increment = 16;
-    private final Function<Resumable, Object> receiver;
+    private final transient Function<Resumable, Object> receiver;
     private Object substitution;
 
     private int[] jumps;
