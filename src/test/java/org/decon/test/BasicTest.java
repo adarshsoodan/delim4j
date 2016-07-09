@@ -42,7 +42,7 @@ public class BasicTest {
         byte[] b = cw.toByteArray();
         {
             BiFunction<Function<Resumable, Object>, Object, Object> invoker
-                    = (f, equalObject) -> {
+                    = (f, expected) -> {
                         try {
                             Class<?> c = (new BytesClassLoader()).fromBytes(className, b);
                             Object o = c.newInstance();
@@ -56,7 +56,7 @@ public class BasicTest {
                                             cont,
                                             (@Cc Context k)
                                             -> Context.capture(k, f)));
-                            Assert.assertEquals(equalObject, ret);
+                            Assert.assertEquals(expected, ret);
                             return ret;
                         } catch (ClassNotFoundException |
                                  InstantiationException |

@@ -1,8 +1,10 @@
 package org.decon.rt;
 
+import org.objectweb.asm.Type;
+
 public class DccException extends RuntimeException {
 
-    public static final String desc = "dcc/rt/DccException";
+    public static final String desc = Type.getInternalName(DccException.class);
 
     Context context;
 

@@ -2,10 +2,11 @@ package org.decon.rt;
 
 import java.util.Arrays;
 import java.util.function.Function;
+import org.objectweb.asm.Type;
 
 public final class Context implements Cloneable {
 
-    public static final String desc = "dcc/rt/Context";
+    public static final String desc = Type.getInternalName(Context.class);
     public static final String argDesc = "(L" + desc + ";";
 
     public static final Object start(Function<Context, Object> context) {
@@ -19,14 +20,14 @@ public final class Context implements Cloneable {
         }
     }
 
-    public static final Object capture(Context cont,
+    public static final Object capture(Context context,
                                        Function<Resumable, Object> receiver) {
-        if (cont == null) {
+        if (context == null) {
             // Start - capture the stack
             throw new DccException(new Context(receiver));
         } else {
             // Finish - resume the stack
-            return cont.getSubstitution();
+            return context.getSubstitution();
         }
     }
 
