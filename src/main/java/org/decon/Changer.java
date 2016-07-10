@@ -45,8 +45,10 @@ public class Changer extends AnalyzerAdapter {
     public AnnotationVisitor visitParameterAnnotation(int parameter, String desc, boolean visible) {
         if (parameter == 0 && Cc.annotationDesc.equals(desc)) {
             annotationPresent = true;
+            return null; // Removes the annotation.
+        } else {
+            return super.visitParameterAnnotation(parameter, desc, visible);
         }
-        return super.visitParameterAnnotation(parameter, desc, visible);
     }
 
     @Override
@@ -94,10 +96,12 @@ public class Changer extends AnalyzerAdapter {
         ret = ret || !(desc.startsWith(Context.argDesc)
                 || desc.startsWith("(Ljava/lang/Object;"));
         ret = ret || "<init>".equals(name) || "<clinit>".equals(name);
-        ret = ret || stack.stream()
-                .anyMatch(v -> Opcodes.UNINITIALIZED_THIS.equals(v) || (v instanceof Label));
-        ret = ret || locals.stream()
-                .anyMatch(v -> Opcodes.UNINITIALIZED_THIS.equals(v) || (v instanceof Label));
+        ret = ret
+                || stack.stream().anyMatch(
+                        v -> Opcodes.UNINITIALIZED_THIS.equals(v) || (v instanceof Label));
+        ret = ret
+                || locals.stream().anyMatch(
+                        v -> Opcodes.UNINITIALIZED_THIS.equals(v) || (v instanceof Label));
         return ret;
     }
 
