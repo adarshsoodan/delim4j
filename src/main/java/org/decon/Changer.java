@@ -1,14 +1,14 @@
 package org.decon;
 
-import org.decon.rt.Cc;
-import org.decon.rt.Context;
-import org.decon.rt.DccException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.decon.rt.Cc;
+import org.decon.rt.Context;
+import org.decon.rt.DccException;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
@@ -20,19 +20,20 @@ import org.objectweb.asm.commons.Method;
 
 public class Changer extends AnalyzerAdapter {
 
-    boolean annotationPresent = false;
+    private boolean annotationPresent = false;
 
-    static final AtomicBoolean methodsLoaded = new AtomicBoolean(false);
-    static Map<String, Method> contMethods = new HashMap<>();
-    static Method getContext;
-    static Method initException;
+    
+    private static final AtomicBoolean methodsLoaded = new AtomicBoolean(false);
+    private static final Map<String, Method> contMethods = new HashMap<>();
+    private static Method getContext;
+    private static Method initException;
 
-    Object[] frame0;
-    Label frame1 = new Label();
-    Label ccTableSwitch = new Label();
+    private final Object[] frame0;
+    private final Label frame1 = new Label();
+    private final Label ccTableSwitch = new Label();
 
-    List<CallWrapInfo> callWrapInfo = new ArrayList<>();
-    boolean hasThis;
+    private final List<CallWrapInfo> callWrapInfo = new ArrayList<>();
+    private final boolean hasThis;
 
     public Changer(String owner, int access, String name, String desc, MethodVisitor mv) {
         super(Opcodes.ASM5, owner, access, name, desc, mv);
@@ -63,7 +64,7 @@ public class Changer extends AnalyzerAdapter {
 
     @Override
     public void visitInvokeDynamicInsn(String name, String desc, Handle bsm, Object... bsmArgs) {
-        if (notContify(name, desc)) {
+        if (notCc(name, desc)) {
             super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs);
         } else {
             int contIndexOnStack = stack.size() - Type.getMethodType(desc).getArgumentTypes().length;
@@ -74,7 +75,7 @@ public class Changer extends AnalyzerAdapter {
 
     @Override
     public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
-        if (notContify(name, desc)) {
+        if (notCc(name, desc)) {
             super.visitMethodInsn(opcode, owner, name, desc, itf);
         } else {
             int contIndexOnStack = stack.size() - Type.getMethodType(desc).getArgumentTypes().length;
@@ -91,7 +92,7 @@ public class Changer extends AnalyzerAdapter {
         super.visitMaxs(maxStack, maxLocals);
     }
 
-    boolean notContify(String name, String desc) {
+    boolean notCc(String name, String desc) {
         boolean ret = !annotationPresent;
         ret = ret || !(desc.startsWith(Context.argDesc)
                 || desc.startsWith("(Ljava/lang/Object;"));
@@ -222,6 +223,7 @@ public class Changer extends AnalyzerAdapter {
             super.visitVarInsn(Opcodes.ASTORE, contArg);
 
             super.visitJumpInsn(Opcodes.GOTO, start);
+
             // Handler
             super.visitLabel(handler);
             super.visitFrame(Opcodes.F_NEW,
@@ -273,10 +275,11 @@ public class Changer extends AnalyzerAdapter {
         super.visitVarInsn(Opcodes.ALOAD, contArg);
         super.visitTypeInsn(Opcodes.CHECKCAST, Context.desc);
 
-        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, contMethods.get("invalidCont").
+        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, contMethods.get("invalidContext").
                               getName(),
-                              contMethods.get("invalidCont").getDescriptor(), false);
-        // Dummy athrow of null. Control never reaches here.
+                              contMethods.get("invalidContext").getDescriptor(), false);
+        // TODO inline invalidContext method call above and remove this dummy athrow of null.
+        // Control never reaches here but verifier does not know because of invalidContext call above.
         super.visitInsn(Opcodes.ACONST_NULL);
         super.visitInsn(Opcodes.ATHROW);
     }

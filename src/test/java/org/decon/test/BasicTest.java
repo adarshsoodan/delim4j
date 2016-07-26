@@ -1,34 +1,22 @@
 package org.decon.test;
 
-import org.decon.ContClassVisitor;
-import org.decon.rt.Context;
-import org.decon.util.BytesClassLoader;
-import java.io.PrintWriter;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import org.decon.ContClassVisitor;
+import org.decon.rt.Cc;
+import org.decon.rt.Context;
+import org.decon.rt.Resumable;
+import org.decon.util.BytesClassLoader;
+import org.junit.Assert;
 import org.junit.Test;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.util.Printer;
 import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceClassVisitor;
-import org.decon.rt.Cc;
-import org.decon.rt.Resumable;
-import org.junit.Assert;
 
 public class BasicTest {
-
-//    @Test
-    public void profile() throws Exception {
-        String className = DummyClass.class.getCanonicalName();
-        ClassReader reader = new ClassReader(className);
-        for (int i = 0; i < 10 * 1000; ++i) {
-            ClassWriter cw = new ClassWriter(0);
-            ClassVisitor cv = new ContClassVisitor(cw);
-            reader.accept(cv, ClassReader.EXPAND_FRAMES);
-            cw.toByteArray();
-        }
-    }
 
     @Test
     public void verifyNonCont() throws Exception {
@@ -42,43 +30,47 @@ public class BasicTest {
         byte[] b = cw.toByteArray();
         {
             BiFunction<Function<Resumable, Object>, Object, Object> invoker
-                    = (receiver, expected) -> {
-                        try {
-                            Class<?> c = (new BytesClassLoader()).fromBytes(className, b);
-                            Object o = c.newInstance();
-                            o = new DummyClass();
-                            BiFunction<Context, Function<Context, Object>, Object> entry1
-                            = (BiFunction<Context, Function<Context, Object>, Object>) o;
-
-                            Object ret
-                            = Context.start(
-                                    (@Cc Context cont)
-                                    -> entry1.apply(
-                                            cont,
-                                            (@Cc Context k)
-                                            -> Context.capture(k, receiver)));
-                            Assert.assertEquals(expected, ret);
-                            return ret;
-                        } catch (ClassNotFoundException |
-                                 InstantiationException |
-                                 IllegalAccessException ex) {
-                            throw new RuntimeException(ex);
-                        }
-                    };
+                    = createInvoker(className, b);
             invoker.apply(r -> 6, 6);
             invoker.apply(r -> r.resume(-1), -1);
         }
-//        Files.write(
-//                Paths.get("C:\\Users\\user\\Desktop\\workspaces\\tmp\\DummyClass.class"),
-//                b, StandardOpenOption.CREATE_NEW);
         {
             Runnable display = () -> {
                 ClassReader reader = new ClassReader(b);
-                PrintWriter printer = new PrintWriter(System.out);
-                TraceClassVisitor tracer = new TraceClassVisitor(null, new Textifier(), printer);
+                Printer printer = new Textifier();
+                TraceClassVisitor tracer = new TraceClassVisitor(null, printer, null);
                 reader.accept(tracer, ClassReader.EXPAND_FRAMES);
+//                System.out.println(printer.getText());
             };
-//            display.run();
+            display.run();
         }
+    }
+
+    private BiFunction<Function<Resumable, Object>, Object, Object>
+            createInvoker(String className, byte[] b) {
+        return (receiver, expected) -> {
+            try {
+                Class<?> c = (new BytesClassLoader()).fromBytes(className, b);
+                Object o = c.newInstance();
+                o = new DummyClass();
+                BiFunction<Context, Function<Context, Object>, Object> entry1
+                        = (BiFunction<Context, Function<Context, Object>, Object>) o;
+
+                Function<Context, Object> action
+                        = (@Cc Context context) -> Context.capture(context, receiver);
+
+                Object ret
+                        = Context.start(
+                                (@Cc Context context)
+                                -> entry1.apply(context, action));
+                Assert.assertEquals(expected, ret);
+                return ret;
+            } catch (ClassNotFoundException |
+                     InstantiationException |
+                     IllegalAccessException ex) {
+                throw new RuntimeException(ex);
+            }
+        };
+
     }
 }

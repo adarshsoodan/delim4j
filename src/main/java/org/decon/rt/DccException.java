@@ -4,6 +4,8 @@ import org.objectweb.asm.Type;
 
 public class DccException extends RuntimeException {
 
+    private static final long serialVersionUID = 1L;
+
     public static final String desc = Type.getInternalName(DccException.class);
 
     private final Context context;

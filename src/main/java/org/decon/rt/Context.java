@@ -11,7 +11,7 @@ public final class Context implements Cloneable, Serializable {
     public static final String desc = Type.getInternalName(Context.class);
     public static final String argDesc = "(L" + desc + ";";
 
-    public static final Object start(Function<Context, Object> frames) {
+    public static Object start(Function<Context, Object> frames) {
         try {
             return frames.apply(null);
         } catch (DccException e) {
@@ -22,7 +22,7 @@ public final class Context implements Cloneable, Serializable {
         }
     }
 
-    public static final Object capture(Context context,
+    public static Object capture(Context context,
                                        Function<Resumable, Object> receiver) {
         if (context == null) {
             // Start - capture the stack
@@ -149,7 +149,7 @@ public final class Context implements Cloneable, Serializable {
         ++posObject;
     }
 
-    public void invalidCont() {
+    public void invalidContext() {
         throw new RuntimeException("This is an invalid Cont - " + this);
     }
 
