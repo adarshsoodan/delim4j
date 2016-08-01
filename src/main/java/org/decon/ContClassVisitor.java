@@ -23,14 +23,10 @@ public class ContClassVisitor extends ClassVisitor {
     @Override
     public MethodVisitor visitMethod(int access, String name, String desc, String signature,
                                      String[] exceptions) {
-//        Type[] argTypes = Type.getArgumentTypes(desc);
         if ("<init>".equals(name) || "<clinit>".equals(name)
                 || !desc.startsWith(Context.argDesc)) {
             return super.visitMethod(access, name, desc, signature, exceptions);
         }
-//                || argTypes.length == 0
-//                || argTypes[0].getSort() != Type.OBJECT
-//                || !argTypes[0].getInternalName().equals("dcc/rt/Context")) {
         return new Changer(this.name, access, name, desc,
                            super.visitMethod(access, name, desc, signature, exceptions));
     }

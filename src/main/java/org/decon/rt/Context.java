@@ -7,9 +7,9 @@ import org.objectweb.asm.Type;
 
 public final class Context implements Cloneable, Serializable {
 
-    public static final long serialVersionUID = 1;
-    public static final String desc = Type.getInternalName(Context.class);
-    public static final String argDesc = "(L" + desc + ";";
+    public static final long   serialVersionUID = 1;
+    public static final String desc             = Type.getInternalName(Context.class);
+    public static final String argDesc          = "(L" + desc + ";";
 
     public static Object start(Function<Context, Object> frames) {
         try {
@@ -22,30 +22,28 @@ public final class Context implements Cloneable, Serializable {
         }
     }
 
-    public static Object capture(Context context,
-                                       Function<Resumable, Object> receiver) {
+    public static Object capture(Context context, Function<Resumable, Object> receiver) {
         if (context == null) {
             // Start - capture the stack
             throw new DccException(new Context(receiver));
-        } else {
-            // Finish - resume the stack
-            return context.getSubstitution();
         }
+        // Finish - resume the stack
+        return context.getSubstitution();
     }
 
-    private static final int increment = 16;
     private final transient Function<Resumable, Object> receiver;
-    private Object substitution;
+    private Object                                      substitution;
 
-    private int[] jumps;
-    private int[] ints;
-    private float[] floats;
-    private long[] longs;
+    private static final int increment = 16;
+
+    private int[]    jumps;
+    private int[]    ints;
+    private float[]  floats;
+    private long[]   longs;
     private double[] doubles;
     private Object[] objects;
 
     private int posJump;
-
     private int posInt;
     private int posFloat;
     private int posLong;
