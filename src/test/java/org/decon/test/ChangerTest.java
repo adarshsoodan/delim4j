@@ -51,7 +51,7 @@ public class ChangerTest {
             try {
                 Class<?> c = (new BytesClassLoader()).fromBytes(className, b);
                 Object o = c.newInstance();
-                o = new DummyClass();
+                // o = new DummyClass();
                 BiFunction<Context, Function<Context, Object>, Object> entry1 =
                         (BiFunction<Context, Function<Context, Object>, Object>) o;
 

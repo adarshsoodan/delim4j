@@ -11,11 +11,16 @@ public final class Context implements Cloneable, Serializable {
     public static final String desc             = Type.getInternalName(Context.class);
     public static final String argDesc          = "(L" + desc + ";";
 
+    public enum State {
+        Capturing, Captured, Cloned, Resuming
+    };
+
     public static Object start(Function<Context, Object> frames) {
         try {
             return frames.apply(null);
         } catch (DccException e) {
             Context context = e.getContext();
+            context.finishCapture();
             Resumable resumable = new Resumable(context, frames);
             Function<Resumable, Object> receiver = context.receiver;
             return receiver.apply(resumable);
@@ -27,14 +32,18 @@ public final class Context implements Cloneable, Serializable {
             // Start - capture the stack
             throw new DccException(new Context(receiver));
         }
-        // Finish - resume the stack
-        return context.getSubstitution();
+        // Finish - resume the stack if context is resuming
+        if (context.getState() == State.Resuming) {
+            return context.getSubstitution();
+        }
+        throw new RuntimeException("Context is not empty");
     }
 
     private final transient Function<Resumable, Object> receiver;
     private Object                                      substitution;
+    private State                                       state;
 
-    private static final int increment = 16;
+    private static final int increment = 8;
 
     private int[]    jumps;
     private int[]    ints;
@@ -52,13 +61,41 @@ public final class Context implements Cloneable, Serializable {
 
     public Context(Function<Resumable, Object> receiver) {
         this.receiver = receiver;
+        state = State.Capturing;
         posJump = posInt = posFloat = posLong = posDouble = posObject = 0;
-        jumps = new int[increment];
-        ints = new int[increment];
-        floats = new float[increment];
-        longs = new long[increment];
-        doubles = new double[increment];
-        objects = new Object[increment];
+        jumps = new int[0];
+        ints = new int[0];
+        floats = new float[0];
+        longs = new long[0];
+        doubles = new double[0];
+        objects = new Object[0];
+    }
+
+    public State getState() {
+        return state;
+    }
+
+    public void finishCapture() {
+        if (getState() == State.Captured) {
+            return;
+        }
+        if (posJump <= 0) {
+            throw new IllegalStateException("Cannot mark a Context as Captured," + " which has an empty jump table."
+                    + "\n posJump = " + posJump);
+        }
+        if (getState() != State.Capturing) {
+            throw new IllegalStateException("Cannot mark a Context as Captured which is not in state Capturing.");
+        }
+        state = State.Captured;
+    }
+
+    public void startResumption() {
+        if (getState() != State.Cloned) {
+            throw new IllegalStateException("Cannot mark a Context as Resuming which is not in state Cloned.");
+        }
+        if (getState() == State.Cloned) {
+            state = State.Resuming;
+        }
     }
 
     public Object getSubstitution() {
@@ -154,7 +191,13 @@ public final class Context implements Cloneable, Serializable {
     @Override
     public Context clone() {
         try {
-            return (Context) super.clone();
+            if (getState() != State.Captured) {
+                throw new CloneNotSupportedException(
+                        "Cannot clone a Context which is not in state Captured.\n Current State = " + getState());
+            }
+            Context ret = (Context) super.clone();
+            ret.state = State.Cloned;
+            return ret;
         } catch (CloneNotSupportedException ex) {
             throw new RuntimeException(ex);
         }
