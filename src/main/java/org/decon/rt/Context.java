@@ -32,11 +32,11 @@ public final class Context implements Cloneable, Serializable {
             // Start - capture the stack
             throw new DccException(new Context(receiver));
         }
-        // Finish - resume the stack if context is resuming
+        // Finish - resume the stack if context is Resuming
         if (context.getState() == State.Resuming) {
             return context.getSubstitution();
         }
-        throw new RuntimeException("Context is not empty");
+        throw new RuntimeException("Context is not in state Resuming.\n state = " + context.getState());
     }
 
     private final transient Function<Resumable, Object> receiver;

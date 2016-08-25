@@ -121,8 +121,6 @@ public class Changer extends AnalyzerAdapter {
         super.visitTryCatchBlock(start, end, handler, DccException.desc);
 
         // POPs to localvars.
-        // TODO No need to store all stack arguments. Store only 'this' pointer, or nothing for invokeStatic.
-        // The called function frame will be preserved anyways, so storing its data in this frame is pointless.
         for (int i = callStack.length - 1; i >= 0; --i) {
             Object t = callStack[i];
             if (Opcodes.TOP.equals(t)) {
@@ -138,6 +136,8 @@ public class Changer extends AnalyzerAdapter {
             }
             super.visitVarInsn(loadOpcode(t), callLocals.length + i);
         }
+        // TODO No need to preserve all stack arguments. Store only 'this' pointer, or nothing for invokeStatic.
+        // The called function frame will be preserved anyways, so storing its data in this frame is pointless.
         super.visitLabel(start);
         super.visitFrame(Opcodes.F_NEW, handlerFrame.length, handlerFrame, callStack.length, callStack);
         visitCallInsn.run();
@@ -173,12 +173,8 @@ public class Changer extends AnalyzerAdapter {
             super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[] {});
 
             CallWrapInfo cwi = callWrapInfo.get(i);
-            Label start = cwi.getCallStart();
             Object[] stackVars = cwi.getStack();
             Object[] localVars = cwi.getLocals();
-            Label handler = cwi.getHandler();
-            Object[] handlerFrame = cwi.getHandlerFrame();
-            int contIndexOnStack = cwi.getContIndexOnStack();
 
             // Copy cont reference as contArg is set null during restoration.
             int contCopy = localVars.length + stackVars.length;
@@ -193,7 +189,7 @@ public class Changer extends AnalyzerAdapter {
                 Method pop = popMethod(t);
                 super.visitVarInsn(Opcodes.ALOAD, contCopy);
                 super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, pop.getName(), pop.getDescriptor(), false);
-                if (j == contIndexOnStack) {
+                if (j == cwi.getContIndexOnStack()) {
                     super.visitInsn(Opcodes.POP);
                     super.visitVarInsn(Opcodes.ALOAD, contCopy);
                     super.visitInsn(Opcodes.ACONST_NULL);
@@ -223,11 +219,11 @@ public class Changer extends AnalyzerAdapter {
             super.visitInsn(Opcodes.ACONST_NULL);
             super.visitVarInsn(Opcodes.ASTORE, contArg);
 
-            super.visitJumpInsn(Opcodes.GOTO, start);
+            super.visitJumpInsn(Opcodes.GOTO, cwi.getCallStart());
 
             // emit exception handler
-            super.visitLabel(handler);
-            super.visitFrame(Opcodes.F_NEW, handlerFrame.length, handlerFrame, 1, new Object[] { DccException.desc });
+            super.visitLabel(cwi.getHandler());
+            super.visitFrame(Opcodes.F_NEW, cwi.getHandlerFrame().length, cwi.getHandlerFrame(), 1, new Object[] { DccException.desc });
             // Get Cont from exception.
             super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, DccException.desc, getContext.getName(),
                     getContext.getDescriptor(), false);
