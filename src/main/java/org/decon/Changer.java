@@ -35,11 +35,13 @@ public class Changer extends AnalyzerAdapter {
 
     private final List<CallWrapInfo> callWrapInfo = new ArrayList<>();
     private final boolean            hasThis;
+    private final int                contArgIndex;
 
     public Changer(String owner, int access, String name, String desc, MethodVisitor mv) {
         super(Opcodes.ASM5, owner, access, name, desc, mv);
         frame0 = locals.toArray();
         hasThis = ((access & Opcodes.ACC_STATIC) == 0);
+        contArgIndex = (hasThis ? 1 : 0);
         initStatic();
     }
 
@@ -62,24 +64,23 @@ public class Changer extends AnalyzerAdapter {
         }
     }
 
-    @Override
-    public void visitInvokeDynamicInsn(String name, String desc, Handle bsm, Object... bsmArgs) {
+    private void emitCall(String name, String desc, Runnable callInsn) {
         if (doNotCc(name, desc)) {
-            super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs);
+            callInsn.run();
         } else {
             int contIndexOnStack = stack.size() - Type.getMethodType(desc).getArgumentTypes().length;
-            emitCallWrapper(() -> super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs), contIndexOnStack);
+            emitCallWrapper(callInsn, contIndexOnStack);
         }
     }
 
     @Override
+    public void visitInvokeDynamicInsn(String name, String desc, Handle bsm, Object... bsmArgs) {
+        emitCall(name, desc, () -> super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs));
+    }
+
+    @Override
     public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
-        if (doNotCc(name, desc)) {
-            super.visitMethodInsn(opcode, owner, name, desc, itf);
-        } else {
-            int contIndexOnStack = stack.size() - Type.getMethodType(desc).getArgumentTypes().length;
-            emitCallWrapper(() -> super.visitMethodInsn(opcode, owner, name, desc, itf), contIndexOnStack);
-        }
+        emitCall(name, desc, () -> super.visitMethodInsn(opcode, owner, name, desc, itf));
     }
 
     @Override
@@ -147,127 +148,36 @@ public class Changer extends AnalyzerAdapter {
     }
 
     void emitCodeEpilogue() {
-        int contArg = (hasThis ? 1 : 0);
         super.visitLabel(ccTableSwitch);
         super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[] {});
         if (callWrapInfo.isEmpty()) {
             super.visitInsn(Opcodes.ACONST_NULL);
-            super.visitVarInsn(Opcodes.ASTORE, contArg);
+            super.visitVarInsn(Opcodes.ASTORE, contArgIndex);
             super.visitJumpInsn(Opcodes.GOTO, frame1);
             return;
         }
-        super.visitVarInsn(Opcodes.ALOAD, contArg);
+        super.visitVarInsn(Opcodes.ALOAD, contArgIndex);
         super.visitJumpInsn(Opcodes.IFNULL, frame1);
 
         Label defaultLabel = new Label();
-        Label[] tableLabels = new Label[callWrapInfo.size()];
-        Arrays.setAll(tableLabels, (i) -> new Label());
+        Label[] caseLabels = new Label[callWrapInfo.size()];
+        Arrays.setAll(caseLabels, (i) -> new Label());
 
-        super.visitVarInsn(Opcodes.ALOAD, contArg);
+        super.visitVarInsn(Opcodes.ALOAD, contArgIndex);
         super.visitTypeInsn(Opcodes.CHECKCAST, Context.desc);
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, methods.get("popJump").getName(),
                 methods.get("popJump").getDescriptor(), false);
-        super.visitTableSwitchInsn(0, tableLabels.length - 1, defaultLabel, tableLabels);
-        for (int i = 0; i < tableLabels.length; i++) {
-            super.visitLabel(tableLabels[i]);
-            super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[] {});
-
+        super.visitTableSwitchInsn(0, caseLabels.length - 1, defaultLabel, caseLabels);
+        for (int i = 0; i < caseLabels.length; i++) {
             CallWrapInfo cwi = callWrapInfo.get(i);
-            Object[] stackVars = cwi.getStack();
-            Object[] localVars = cwi.getLocals();
-
-            // Copy cont reference as contArg is set null during restoration.
-            int contCopy = localVars.length + stackVars.length;
-            super.visitVarInsn(Opcodes.ALOAD, contArg);
-            super.visitTypeInsn(Opcodes.CHECKCAST, Context.desc);
-            super.visitVarInsn(Opcodes.ASTORE, contCopy);
-            for (int j = 0; j < stackVars.length; ++j) {
-                Object t = stackVars[j];
-                if (Opcodes.TOP.equals(t)) {
-                    continue;
-                }
-                Method pop = popMethod(t);
-                super.visitVarInsn(Opcodes.ALOAD, contCopy);
-                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, pop.getName(), pop.getDescriptor(), false);
-                if (j == cwi.getContIndexOnStack()) {
-                    super.visitInsn(Opcodes.POP);
-                    super.visitVarInsn(Opcodes.ALOAD, contCopy);
-                    super.visitInsn(Opcodes.ACONST_NULL);
-                    super.visitVarInsn(Opcodes.ASTORE, localVars.length + j);
-                } else {
-                    if (t instanceof String) {
-                        super.visitTypeInsn(Opcodes.CHECKCAST, (String) t);
-                    }
-                    super.visitInsn(Opcodes.DUP);
-                    super.visitVarInsn(storeOpcode(t), localVars.length + j);
-                }
-            }
-            for (int j = 0; j < localVars.length; ++j) {
-                Object t = localVars[j];
-                if (Opcodes.TOP.equals(t)) {
-                    continue;
-                }
-                Method pop = popMethod(t);
-                super.visitVarInsn(Opcodes.ALOAD, contCopy);
-                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, pop.getName(), pop.getDescriptor(), false);
-                if (t instanceof String) {
-                    super.visitTypeInsn(Opcodes.CHECKCAST, (String) t);
-                }
-                super.visitVarInsn(storeOpcode(t), j);
-            }
-            // Set current cont arg as null to avoid capturing it in next continuation.
-            super.visitInsn(Opcodes.ACONST_NULL);
-            super.visitVarInsn(Opcodes.ASTORE, contArg);
-
-            super.visitJumpInsn(Opcodes.GOTO, cwi.getCallStart());
-
-            // emit exception handler
-            super.visitLabel(cwi.getHandler());
-            super.visitFrame(Opcodes.F_NEW, cwi.getHandlerFrame().length, cwi.getHandlerFrame(), 1, new Object[] { DccException.desc });
-            // Get Cont from exception.
-            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, DccException.desc, getContext.getName(),
-                    getContext.getDescriptor(), false);
-            // Order of local vars - Push index 0 last.
-            for (int j = localVars.length - 1; j >= 0; --j) {
-                Object t = localVars[j];
-                if (Opcodes.TOP.equals(t)) {
-                    continue;
-                }
-                super.visitInsn(Opcodes.DUP);
-                super.visitVarInsn(loadOpcode(t), j);
-                Method push = pushMethod(t);
-                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, push.getName(), push.getDescriptor(), false);
-            }
-            // Order of stack - Push end of array into Cont first.
-            // Index 0 gets pushed last.
-            for (int j = stackVars.length - 1; j >= 0; --j) {
-                Object t = stackVars[j];
-                if (Opcodes.TOP.equals(t)) {
-                    continue;
-                }
-                super.visitInsn(Opcodes.DUP);
-                super.visitVarInsn(loadOpcode(t), localVars.length + j);
-                Method push = pushMethod(t);
-                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, push.getName(), push.getDescriptor(), false);
-            }
-            super.visitInsn(Opcodes.DUP);
-            super.visitLdcInsn(Integer.valueOf(i));
-            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, methods.get("pushJump").getName(),
-                    methods.get("pushJump").getDescriptor(), false);
-
-            // Create new exception. Cont object is on stack.
-            mv.visitTypeInsn(Opcodes.NEW, DccException.desc);
-            mv.visitInsn(Opcodes.DUP_X1);
-            mv.visitInsn(Opcodes.SWAP);
-            mv.visitMethodInsn(Opcodes.INVOKESPECIAL, DccException.desc, initException.getName(),
-                    initException.getDescriptor(), false);
-            super.visitInsn(Opcodes.ATHROW);
+            emitSwitchCase(cwi, caseLabels[i]);
+            emitHandler(cwi, i);
         }
 
         super.visitLabel(defaultLabel);
 
         super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[] {});
-        super.visitVarInsn(Opcodes.ALOAD, contArg);
+        super.visitVarInsn(Opcodes.ALOAD, contArgIndex);
         super.visitTypeInsn(Opcodes.CHECKCAST, Context.desc);
 
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, methods.get("invalidContext").getName(),
@@ -275,6 +185,106 @@ public class Changer extends AnalyzerAdapter {
         // TODO inline invalidContext method call above and remove this dummy athrow of null.
         // Control never reaches here but verifier does not know because of invalidContext call above.
         super.visitInsn(Opcodes.ACONST_NULL);
+        super.visitInsn(Opcodes.ATHROW);
+    }
+
+    private void emitSwitchCase(CallWrapInfo cwi, Label caseLabel) {
+        super.visitLabel(caseLabel);
+        super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[] {});
+
+        Object[] stackVars = cwi.getStack();
+        Object[] localVars = cwi.getLocals();
+
+        // Copy cont reference as contArg is set null during restoration.
+        int contCopy = localVars.length + stackVars.length;
+        super.visitVarInsn(Opcodes.ALOAD, contArgIndex);
+        super.visitTypeInsn(Opcodes.CHECKCAST, Context.desc);
+        super.visitVarInsn(Opcodes.ASTORE, contCopy);
+        for (int j = 0; j < stackVars.length; ++j) {
+            Object t = stackVars[j];
+            if (Opcodes.TOP.equals(t)) {
+                continue;
+            }
+            Method pop = popMethod(t);
+            super.visitVarInsn(Opcodes.ALOAD, contCopy);
+            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, pop.getName(), pop.getDescriptor(), false);
+            if (j == cwi.getContIndexOnStack()) {
+                super.visitInsn(Opcodes.POP);
+                super.visitVarInsn(Opcodes.ALOAD, contCopy);
+                super.visitInsn(Opcodes.ACONST_NULL);
+                super.visitVarInsn(Opcodes.ASTORE, localVars.length + j);
+            } else {
+                if (t instanceof String) {
+                    super.visitTypeInsn(Opcodes.CHECKCAST, (String) t);
+                }
+                super.visitInsn(Opcodes.DUP);
+                super.visitVarInsn(storeOpcode(t), localVars.length + j);
+            }
+        }
+        for (int j = 0; j < localVars.length; ++j) {
+            Object t = localVars[j];
+            if (Opcodes.TOP.equals(t)) {
+                continue;
+            }
+            Method pop = popMethod(t);
+            super.visitVarInsn(Opcodes.ALOAD, contCopy);
+            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, pop.getName(), pop.getDescriptor(), false);
+            if (t instanceof String) {
+                super.visitTypeInsn(Opcodes.CHECKCAST, (String) t);
+            }
+            super.visitVarInsn(storeOpcode(t), j);
+        }
+        // Set current cont arg as null to avoid capturing it in next continuation.
+        super.visitInsn(Opcodes.ACONST_NULL);
+        super.visitVarInsn(Opcodes.ASTORE, contArgIndex);
+
+        super.visitJumpInsn(Opcodes.GOTO, cwi.getCallStart());
+    }
+
+    private void emitHandler(CallWrapInfo cwi, int jump) {
+        Object[] stackVars = cwi.getStack();
+        Object[] localVars = cwi.getLocals();
+
+        super.visitLabel(cwi.getHandler());
+        super.visitFrame(Opcodes.F_NEW, cwi.getHandlerFrame().length, cwi.getHandlerFrame(), 1,
+                new Object[] { DccException.desc });
+        // Get Cont from exception.
+        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, DccException.desc, getContext.getName(),
+                getContext.getDescriptor(), false);
+        // Order of local vars - Push index 0 last.
+        for (int j = localVars.length - 1; j >= 0; --j) {
+            Object t = localVars[j];
+            if (Opcodes.TOP.equals(t)) {
+                continue;
+            }
+            super.visitInsn(Opcodes.DUP);
+            super.visitVarInsn(loadOpcode(t), j);
+            Method push = pushMethod(t);
+            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, push.getName(), push.getDescriptor(), false);
+        }
+        // Order of stack - Push end of array into Cont first.
+        // Index 0 gets pushed last.
+        for (int j = stackVars.length - 1; j >= 0; --j) {
+            Object t = stackVars[j];
+            if (Opcodes.TOP.equals(t)) {
+                continue;
+            }
+            super.visitInsn(Opcodes.DUP);
+            super.visitVarInsn(loadOpcode(t), localVars.length + j);
+            Method push = pushMethod(t);
+            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, push.getName(), push.getDescriptor(), false);
+        }
+        super.visitInsn(Opcodes.DUP);
+        super.visitLdcInsn(Integer.valueOf(jump));
+        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, methods.get("pushJump").getName(),
+                methods.get("pushJump").getDescriptor(), false);
+
+        // Create new exception. Cont object is on stack.
+        mv.visitTypeInsn(Opcodes.NEW, DccException.desc);
+        mv.visitInsn(Opcodes.DUP_X1);
+        mv.visitInsn(Opcodes.SWAP);
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, DccException.desc, initException.getName(),
+                initException.getDescriptor(), false);
         super.visitInsn(Opcodes.ATHROW);
     }
 
