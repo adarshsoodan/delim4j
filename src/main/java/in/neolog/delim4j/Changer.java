@@ -1,4 +1,4 @@
-package org.decon;
+package in.neolog.delim4j;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -8,9 +8,6 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
-import org.decon.rt.Cc;
-import org.decon.rt.Context;
-import org.decon.rt.DccException;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
@@ -19,6 +16,10 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.AnalyzerAdapter;
 import org.objectweb.asm.commons.Method;
+
+import in.neolog.delim4j.rt.Cc;
+import in.neolog.delim4j.rt.Context;
+import in.neolog.delim4j.rt.DccException;
 
 public class Changer extends AnalyzerAdapter {
 

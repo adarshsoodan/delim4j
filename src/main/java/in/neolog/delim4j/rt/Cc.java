@@ -1,4 +1,4 @@
-package org.decon.rt;
+package in.neolog.delim4j.rt;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;

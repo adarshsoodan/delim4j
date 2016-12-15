@@ -1,4 +1,4 @@
-package org.decon.rt;
+package in.neolog.delim4j.rt;
 
 import org.objectweb.asm.Type;
 

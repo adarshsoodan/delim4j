@@ -1,4 +1,4 @@
-package org.decon;
+package in.neolog.delim4j;
 
 import org.objectweb.asm.Label;
 

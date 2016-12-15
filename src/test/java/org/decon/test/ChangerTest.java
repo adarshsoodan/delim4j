@@ -4,10 +4,6 @@ import java.io.IOException;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-import org.decon.ContextClassVisitor;
-import org.decon.rt.Cc;
-import org.decon.rt.Context;
-import org.decon.rt.Resumable;
 import org.decon.util.BytesClassLoader;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -18,6 +14,11 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.util.Printer;
 import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceClassVisitor;
+
+import in.neolog.delim4j.ContextClassVisitor;
+import in.neolog.delim4j.rt.Cc;
+import in.neolog.delim4j.rt.Context;
+import in.neolog.delim4j.rt.Resumable;
 
 public class ChangerTest {
 
