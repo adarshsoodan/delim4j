@@ -1,16 +1,14 @@
 package in.neolog.delim4j.rt;
 
-import org.objectweb.asm.Type;
-
-public class DccException extends RuntimeException {
+public class DelimException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    public static final String desc = Type.getInternalName(DccException.class);
+    public static final String desc = DelimException.class.getName().replace('.', '/');
 
     private final Context context;
 
-    public DccException(final Context context) {
+    public DelimException(final Context context) {
         super(null, null, false, false);
         this.context = context;
     }

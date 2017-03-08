@@ -3,12 +3,11 @@ package in.neolog.delim4j.rt;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.function.Function;
-import org.objectweb.asm.Type;
 
 public final class Context implements Cloneable, Serializable {
 
     public static final long   serialVersionUID = 1;
-    public static final String desc             = Type.getInternalName(Context.class);
+    public static final String desc             = Context.class.getName().replace('.', '/');
     public static final String argDesc          = "(L" + desc + ";";
 
     public enum State {
@@ -18,7 +17,7 @@ public final class Context implements Cloneable, Serializable {
     public static Object start(Function<Context, Object> frames) {
         try {
             return frames.apply(null);
-        } catch (DccException e) {
+        } catch (DelimException e) {
             Context context = e.getContext();
             context.finishCapture();
             Resumable resumable = new Resumable(context, frames);
@@ -30,13 +29,13 @@ public final class Context implements Cloneable, Serializable {
     public static Object capture(Context context, Function<Resumable, Object> receiver) {
         if (context == null) {
             // Start - capture the stack
-            throw new DccException(new Context(receiver));
+            throw new DelimException(new Context(receiver));
         }
         // Finish - resume the stack if context is Resuming
         if (context.getState() == State.Resuming) {
             return context.getSubstitution();
         }
-        throw new RuntimeException("Context is not in state Resuming.\n state = " + context.getState());
+        throw new RuntimeException("Context is not in state Resuming.\n Current State = " + context.getState());
     }
 
     private final transient Function<Resumable, Object> receiver;
@@ -80,18 +79,21 @@ public final class Context implements Cloneable, Serializable {
             return;
         }
         if (posJump <= 0) {
-            throw new IllegalStateException("Cannot mark a Context as Captured," + " which has an empty jump table."
-                    + "\n posJump = " + posJump);
+            throw new IllegalStateException(
+                    "Cannot mark a Context as Captured, which has an empty jump table." + "\n posJump = " + posJump);
         }
         if (getState() != State.Capturing) {
-            throw new IllegalStateException("Cannot mark a Context as Captured which is not in state Capturing.");
+            throw new IllegalStateException(
+                    "Cannot mark a Context as Captured which is not in state Capturing.\n Current State = "
+                            + getState());
         }
         state = State.Captured;
     }
 
     public void startResumption() {
         if (getState() != State.Cloned) {
-            throw new IllegalStateException("Cannot mark a Context as Resuming which is not in state Cloned.");
+            throw new IllegalStateException(
+                    "Cannot mark a Context as Resuming which is not in state Cloned.\n Current State = " + getState());
         }
         if (getState() == State.Cloned) {
             state = State.Resuming;

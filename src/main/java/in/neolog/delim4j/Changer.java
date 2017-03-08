@@ -19,7 +19,7 @@ import org.objectweb.asm.commons.Method;
 
 import in.neolog.delim4j.rt.Cc;
 import in.neolog.delim4j.rt.Context;
-import in.neolog.delim4j.rt.DccException;
+import in.neolog.delim4j.rt.DelimException;
 
 public class Changer extends AnalyzerAdapter {
 
@@ -120,7 +120,7 @@ public class Changer extends AnalyzerAdapter {
         Label start = new Label();
         Label end = new Label();
         Label handler = new Label();
-        super.visitTryCatchBlock(start, end, handler, DccException.desc);
+        super.visitTryCatchBlock(start, end, handler, DelimException.desc);
 
         // POPs to localvars.
         for (int i = callStack.length - 1; i >= 0; --i) {
@@ -248,9 +248,9 @@ public class Changer extends AnalyzerAdapter {
 
         super.visitLabel(cwi.getHandler());
         super.visitFrame(Opcodes.F_NEW, cwi.getHandlerFrame().length, cwi.getHandlerFrame(), 1,
-                new Object[] { DccException.desc });
+                new Object[] { DelimException.desc });
         // Get Cont from exception.
-        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, DccException.desc, getContext.getName(),
+        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, DelimException.desc, getContext.getName(),
                 getContext.getDescriptor(), false);
         // Order of local vars - Push index 0 last.
         for (int j = localVars.length - 1; j >= 0; --j) {
@@ -281,10 +281,10 @@ public class Changer extends AnalyzerAdapter {
                 methods.get("pushJump").getDescriptor(), false);
 
         // Create new exception. Cont object is on stack.
-        mv.visitTypeInsn(Opcodes.NEW, DccException.desc);
+        mv.visitTypeInsn(Opcodes.NEW, DelimException.desc);
         mv.visitInsn(Opcodes.DUP_X1);
         mv.visitInsn(Opcodes.SWAP);
-        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, DccException.desc, initException.getName(),
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, DelimException.desc, initException.getName(),
                 initException.getDescriptor(), false);
         super.visitInsn(Opcodes.ATHROW);
     }
@@ -362,8 +362,8 @@ public class Changer extends AnalyzerAdapter {
             Arrays.stream(Context.class.getDeclaredMethods())
                     .forEach(m -> methods.put(m.getName(), Method.getMethod(m)));
             try {
-                getContext = Method.getMethod(DccException.class.getMethod("getContext"));
-                initException = Method.getMethod(DccException.class.getConstructor(Context.class));
+                getContext = Method.getMethod(DelimException.class.getMethod("getContext"));
+                initException = Method.getMethod(DelimException.class.getConstructor(Context.class));
             } catch (NoSuchMethodException | SecurityException ex) {
                 throw new RuntimeException(ex);
             }

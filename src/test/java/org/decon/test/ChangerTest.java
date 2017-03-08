@@ -6,7 +6,6 @@ import java.util.function.Function;
 
 import org.decon.util.BytesClassLoader;
 import org.junit.Assert;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -22,27 +21,20 @@ import in.neolog.delim4j.rt.Resumable;
 
 public class ChangerTest {
 
-    private static BytesClassLoader loader;
-
-    @BeforeClass
-    public static void setupClass() {
-        loader = new BytesClassLoader();
-    }
-
     @Test
     public void verifyChanged() {
         String className = DummyClass.class.getCanonicalName();
         BiFunction<Function<Resumable, Object>, Object, Object> invoker = createInvoker(changed(className));
-        invoker.apply(r -> 6, 6);
-        invoker.apply(r -> r.resume(-1), -1);
+        invoker.apply(r -> "6", "6");
+        invoker.apply(r -> r.resume("-1"), "-1");
     }
 
     @Test(expected = IllegalStateException.class)
     public void verifyUnchanged() {
         String className = DummyClass.class.getCanonicalName();
         BiFunction<Function<Resumable, Object>, Object, Object> invoker = createInvoker(unchanged(className));
-        invoker.apply(r -> 6, 6);
-        invoker.apply(r -> r.resume(-1), -1);
+        invoker.apply(r -> "6", "6");
+        invoker.apply(r -> r.resume("-1"), "-1");
     }
 
     public void printCode() {
@@ -67,7 +59,7 @@ public class ChangerTest {
             reader.accept(cv, ClassReader.EXPAND_FRAMES);
             byte[] b = cw.toByteArray();
             Class<?> c;
-            c = loader.fromBytes(className, b);
+            c = BytesClassLoader.singleton.fromBytes(className, b);
             Object o = c.newInstance();
             return (BiFunction<Context, Function<Context, Object>, Object>) o;
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | IOException e) {
@@ -77,7 +69,8 @@ public class ChangerTest {
 
     private BiFunction<Context, Function<Context, Object>, Object> unchanged(String className) {
         try {
-            Object o = Class.forName(className).newInstance();
+            Object o = Class.forName(className)
+                            .newInstance();
             return (BiFunction<Context, Function<Context, Object>, Object>) o;
         } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
             throw new RuntimeException(e);
