@@ -186,10 +186,6 @@ public final class Context implements Cloneable, Serializable {
         ++posObject;
     }
 
-    public void invalidContext() {
-        throw new RuntimeException("This is an invalid Cont - " + this);
-    }
-
     @Override
     public Context clone() {
         try {

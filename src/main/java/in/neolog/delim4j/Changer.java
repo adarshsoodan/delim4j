@@ -20,6 +20,7 @@ import org.objectweb.asm.commons.Method;
 import in.neolog.delim4j.rt.Cc;
 import in.neolog.delim4j.rt.Context;
 import in.neolog.delim4j.rt.DelimException;
+import in.neolog.delim4j.rt.InvalidContextException;
 
 public class Changer extends AnalyzerAdapter {
 
@@ -29,6 +30,7 @@ public class Changer extends AnalyzerAdapter {
     private static final Map<String, Method> methods       = new HashMap<>();
     private static Method                    getContext;
     private static Method                    initException;
+    private static Method                    initInvalidException;
 
     private final Object[] frame0;
     private final Label    frame1        = new Label();
@@ -178,14 +180,10 @@ public class Changer extends AnalyzerAdapter {
         super.visitLabel(defaultLabel);
 
         super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[] {});
-        super.visitVarInsn(Opcodes.ALOAD, contArgIndex);
-        super.visitTypeInsn(Opcodes.CHECKCAST, Context.desc);
-
-        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, methods.get("invalidContext").getName(),
-                methods.get("invalidContext").getDescriptor(), false);
-        // TODO inline invalidContext method call above and remove this dummy athrow of null.
-        // Control never reaches here but verifier does not know because of invalidContext call above.
-        super.visitInsn(Opcodes.ACONST_NULL);
+        super.visitTypeInsn(Opcodes.NEW, InvalidContextException.desc);
+        super.visitInsn(Opcodes.DUP);
+        super.visitMethodInsn(Opcodes.INVOKESPECIAL, InvalidContextException.desc, initInvalidException.getName(),
+                initInvalidException.getDescriptor(), false);
         super.visitInsn(Opcodes.ATHROW);
     }
 
@@ -281,10 +279,10 @@ public class Changer extends AnalyzerAdapter {
                 methods.get("pushJump").getDescriptor(), false);
 
         // Create new exception. Cont object is on stack.
-        mv.visitTypeInsn(Opcodes.NEW, DelimException.desc);
-        mv.visitInsn(Opcodes.DUP_X1);
-        mv.visitInsn(Opcodes.SWAP);
-        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, DelimException.desc, initException.getName(),
+        super.visitTypeInsn(Opcodes.NEW, DelimException.desc);
+        super.visitInsn(Opcodes.DUP_X1);
+        super.visitInsn(Opcodes.SWAP);
+        super.visitMethodInsn(Opcodes.INVOKESPECIAL, DelimException.desc, initException.getName(),
                 initException.getDescriptor(), false);
         super.visitInsn(Opcodes.ATHROW);
     }
@@ -364,6 +362,7 @@ public class Changer extends AnalyzerAdapter {
             try {
                 getContext = Method.getMethod(DelimException.class.getMethod("getContext"));
                 initException = Method.getMethod(DelimException.class.getConstructor(Context.class));
+                initInvalidException = Method.getMethod(InvalidContextException.class.getConstructor());
             } catch (NoSuchMethodException | SecurityException ex) {
                 throw new RuntimeException(ex);
             }
