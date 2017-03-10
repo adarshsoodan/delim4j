@@ -180,8 +180,11 @@ public class Changer extends AnalyzerAdapter {
         super.visitLabel(defaultLabel);
 
         super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[] {});
+        super.visitVarInsn(Opcodes.ALOAD, contArgIndex);
+        super.visitTypeInsn(Opcodes.CHECKCAST, Context.desc);
         super.visitTypeInsn(Opcodes.NEW, InvalidContextException.desc);
-        super.visitInsn(Opcodes.DUP);
+        super.visitInsn(Opcodes.DUP_X1);
+        super.visitInsn(Opcodes.SWAP);
         super.visitMethodInsn(Opcodes.INVOKESPECIAL, InvalidContextException.desc, initInvalidException.getName(),
                 initInvalidException.getDescriptor(), false);
         super.visitInsn(Opcodes.ATHROW);
@@ -362,7 +365,7 @@ public class Changer extends AnalyzerAdapter {
             try {
                 getContext = Method.getMethod(DelimException.class.getMethod("getContext"));
                 initException = Method.getMethod(DelimException.class.getConstructor(Context.class));
-                initInvalidException = Method.getMethod(InvalidContextException.class.getConstructor());
+                initInvalidException = Method.getMethod(InvalidContextException.class.getConstructor(Context.class));
             } catch (NoSuchMethodException | SecurityException ex) {
                 throw new RuntimeException(ex);
             }
