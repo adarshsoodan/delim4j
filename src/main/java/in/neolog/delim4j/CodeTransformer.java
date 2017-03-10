@@ -22,7 +22,7 @@ import in.neolog.delim4j.rt.Context;
 import in.neolog.delim4j.rt.DelimException;
 import in.neolog.delim4j.rt.InvalidContextException;
 
-public class Changer extends AnalyzerAdapter {
+public class CodeTransformer extends AnalyzerAdapter {
 
     private boolean annotationPresent = false;
 
@@ -40,7 +40,7 @@ public class Changer extends AnalyzerAdapter {
     private final boolean            hasThis;
     private final int                contArgIndex;
 
-    public Changer(String owner, int access, String name, String desc, MethodVisitor mv) {
+    public CodeTransformer(String owner, int access, String name, String desc, MethodVisitor mv) {
         super(Opcodes.ASM5, owner, access, name, desc, mv);
         frame0 = locals.toArray();
         hasThis = ((access & Opcodes.ACC_STATIC) == 0);
@@ -52,7 +52,7 @@ public class Changer extends AnalyzerAdapter {
     public AnnotationVisitor visitParameterAnnotation(int parameter, String desc, boolean visible) {
         if (parameter == 0 && Cc.annotationDesc.equals(desc)) {
             annotationPresent = true;
-            return null; // Removes the annotation.
+            return null; // Removes the @Cc annotation.
         }
         return super.visitParameterAnnotation(parameter, desc, visible);
     }

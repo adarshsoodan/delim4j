@@ -26,7 +26,7 @@ public class ContextClassVisitor extends ClassVisitor {
         if ("<init>".equals(name) || "<clinit>".equals(name) || !desc.startsWith(Context.argDesc)) {
             return super.visitMethod(access, name, desc, signature, exceptions);
         }
-        return new Changer(this.className, access, name, desc,
+        return new CodeTransformer(this.className, access, name, desc,
                 super.visitMethod(access, name, desc, signature, exceptions));
     }
 
