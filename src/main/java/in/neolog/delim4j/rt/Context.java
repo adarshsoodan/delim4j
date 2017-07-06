@@ -7,7 +7,8 @@ import java.util.function.Function;
 public final class Context implements Cloneable, Serializable {
 
     public static final long   serialVersionUID = 1;
-    public static final String desc             = Context.class.getName().replace('.', '/');
+    public static final String desc             = Context.class.getName()
+                                                               .replace('.', '/');
     public static final String argDesc          = "(L" + desc + ";";
 
     public enum State {
@@ -62,12 +63,12 @@ public final class Context implements Cloneable, Serializable {
         this.receiver = receiver;
         state = State.Capturing;
         posJump = posInt = posFloat = posLong = posDouble = posObject = 0;
-        jumps = new int[0];
-        ints = new int[0];
-        floats = new float[0];
-        longs = new long[0];
-        doubles = new double[0];
-        objects = new Object[0];
+        jumps = null;
+        ints = null;
+        floats = null;
+        longs = null;
+        doubles = null;
+        objects = null;
     }
 
     public State getState() {
@@ -114,7 +115,9 @@ public final class Context implements Cloneable, Serializable {
     }
 
     public void pushJump(final int x) {
-        if (posJump == jumps.length) {
+        if (jumps == null) {
+            jumps = new int[increment];
+        } else if (posJump == jumps.length) {
             jumps = Arrays.copyOf(jumps, jumps.length + increment);
         }
         jumps[posJump] = x;
@@ -127,7 +130,9 @@ public final class Context implements Cloneable, Serializable {
     }
 
     public void pushInt(final int x) {
-        if (posInt == ints.length) {
+        if (ints == null) {
+            ints = new int[increment];
+        } else if (posInt == ints.length) {
             ints = Arrays.copyOf(ints, ints.length + increment);
         }
         ints[posInt] = x;
@@ -140,7 +145,9 @@ public final class Context implements Cloneable, Serializable {
     }
 
     public void pushFloat(final float x) {
-        if (posFloat == floats.length) {
+        if (floats == null) {
+            floats = new float[increment];
+        } else if (posFloat == floats.length) {
             floats = Arrays.copyOf(floats, floats.length + increment);
         }
         floats[posFloat] = x;
@@ -153,7 +160,9 @@ public final class Context implements Cloneable, Serializable {
     }
 
     public void pushLong(final long x) {
-        if (posLong == longs.length) {
+        if (longs == null) {
+            longs = new long[increment];
+        } else if (posLong == longs.length) {
             longs = Arrays.copyOf(longs, longs.length + increment);
         }
         longs[posLong] = x;
@@ -166,7 +175,9 @@ public final class Context implements Cloneable, Serializable {
     }
 
     public void pushDouble(final double x) {
-        if (posDouble == doubles.length) {
+        if (doubles == null) {
+            doubles = new double[increment];
+        } else if (posDouble == doubles.length) {
             doubles = Arrays.copyOf(doubles, doubles.length + increment);
         }
         doubles[posDouble] = x;
@@ -179,7 +190,9 @@ public final class Context implements Cloneable, Serializable {
     }
 
     public void pushObject(final Object o) {
-        if (posObject == objects.length) {
+        if (objects == null) {
+            objects = new Object[increment];
+        } else if (posObject == objects.length) {
             objects = Arrays.copyOf(objects, objects.length + increment);
         }
         objects[posObject] = o;
