@@ -23,6 +23,7 @@ public class ContextClassVisitor extends ClassVisitor {
     @Override
     public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
         // TODO skip (access & ACC_NATIVE) methods
+        // TODO error out on synchronised methods
         if ("<init>".equals(name) || "<clinit>".equals(name) || !desc.startsWith(Context.argDesc)) {
             return super.visitMethod(access, name, desc, signature, exceptions);
         }

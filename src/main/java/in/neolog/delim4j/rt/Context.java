@@ -1,6 +1,7 @@
 package in.neolog.delim4j.rt;
 
 import java.io.Serializable;
+import java.lang.ref.SoftReference;
 import java.util.Arrays;
 import java.util.function.Function;
 
@@ -42,6 +43,7 @@ public final class Context implements Cloneable, Serializable {
     private final transient Function<Resumable, Object> receiver;
     private Object                                      substitution;
     private State                                       state;
+    private final SoftReference<Context>                clonedFrom;
 
     private static final int increment = 8;
 
@@ -62,6 +64,7 @@ public final class Context implements Cloneable, Serializable {
     public Context(Function<Resumable, Object> receiver) {
         this.receiver = receiver;
         state = State.Capturing;
+        clonedFrom = null;
         posJump = posInt = posFloat = posLong = posDouble = posObject = 0;
         jumps = null;
         ints = null;
@@ -69,6 +72,10 @@ public final class Context implements Cloneable, Serializable {
         longs = null;
         doubles = null;
         objects = null;
+    }
+
+    public Context getClonedFrom() {
+        return clonedFrom.get();
     }
 
     public State getState() {
@@ -201,16 +208,34 @@ public final class Context implements Cloneable, Serializable {
 
     @Override
     public Context clone() {
-        try {
-            if (getState() != State.Captured) {
-                throw new CloneNotSupportedException(
-                        "Cannot clone a Context which is not in state Captured.\n Current State = " + getState());
-            }
-            Context ret = (Context) super.clone();
-            ret.state = State.Cloned;
-            return ret;
-        } catch (CloneNotSupportedException ex) {
-            throw new RuntimeException(ex);
+        if (getState() != State.Captured) {
+            throw new IllegalStateException(
+                    "Cannot clone a Context which is not in state Captured.\n Current State = " + getState());
         }
+        Context ret = new Context(receiver, substitution, State.Cloned, new SoftReference<Context>(this), jumps, ints,
+                floats, longs, doubles, objects, posJump, posInt, posFloat, posLong, posDouble, posObject);
+        return ret;
     }
+
+    private Context(Function<Resumable, Object> receiver, Object substitution, State state,
+            SoftReference<Context> clonedFrom, int[] jumps, int[] ints, float[] floats, long[] longs, double[] doubles,
+            Object[] objects, int posJump, int posInt, int posFloat, int posLong, int posDouble, int posObject) {
+        this.receiver = receiver;
+        this.substitution = substitution;
+        this.state = state;
+        this.clonedFrom = clonedFrom;
+        this.jumps = jumps;
+        this.ints = ints;
+        this.floats = floats;
+        this.longs = longs;
+        this.doubles = doubles;
+        this.objects = objects;
+        this.posJump = posJump;
+        this.posInt = posInt;
+        this.posFloat = posFloat;
+        this.posLong = posLong;
+        this.posDouble = posDouble;
+        this.posObject = posObject;
+    }
+
 }

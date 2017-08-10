@@ -1,11 +1,34 @@
 package in.neolog.delim4j;
 
+import static org.objectweb.asm.Opcodes.ACONST_NULL;
+import static org.objectweb.asm.Opcodes.ALOAD;
+import static org.objectweb.asm.Opcodes.ASTORE;
+import static org.objectweb.asm.Opcodes.ATHROW;
+import static org.objectweb.asm.Opcodes.CHECKCAST;
+import static org.objectweb.asm.Opcodes.DLOAD;
+import static org.objectweb.asm.Opcodes.DSTORE;
+import static org.objectweb.asm.Opcodes.DUP;
+import static org.objectweb.asm.Opcodes.DUP_X1;
+import static org.objectweb.asm.Opcodes.FLOAD;
+import static org.objectweb.asm.Opcodes.FSTORE;
+import static org.objectweb.asm.Opcodes.F_NEW;
+import static org.objectweb.asm.Opcodes.GOTO;
+import static org.objectweb.asm.Opcodes.IFNULL;
+import static org.objectweb.asm.Opcodes.ILOAD;
+import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
+import static org.objectweb.asm.Opcodes.INVOKEVIRTUAL;
+import static org.objectweb.asm.Opcodes.ISTORE;
+import static org.objectweb.asm.Opcodes.LLOAD;
+import static org.objectweb.asm.Opcodes.LSTORE;
+import static org.objectweb.asm.Opcodes.NEW;
+import static org.objectweb.asm.Opcodes.POP;
+import static org.objectweb.asm.Opcodes.SWAP;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
 import org.objectweb.asm.AnnotationVisitor;
@@ -26,7 +49,6 @@ public class CodeTransformer extends AnalyzerAdapter {
 
     private boolean annotationPresent = false;
 
-    private static final AtomicBoolean       methodsLoaded = new AtomicBoolean(false);
     private static final Map<String, Method> methods       = new HashMap<>();
     private static Method                    getContext;
     private static Method                    initException;
@@ -61,9 +83,9 @@ public class CodeTransformer extends AnalyzerAdapter {
     public void visitCode() {
         super.visitCode();
         if (annotationPresent) {
-            super.visitJumpInsn(Opcodes.GOTO, ccTableSwitch);
+            super.visitJumpInsn(GOTO, ccTableSwitch);
             super.visitLabel(frame1);
-            super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[] {});
+            super.visitFrame(F_NEW, frame0.length, frame0, 0, new Object[] {});
         }
     }
 
@@ -71,7 +93,8 @@ public class CodeTransformer extends AnalyzerAdapter {
         if (doNotCc(name, desc)) {
             callInsn.run();
         } else {
-            int contIndexOnStack = stack.size() - Type.getMethodType(desc).getArgumentTypes().length;
+            int contIndexOnStack = stack.size() - Type.getMethodType(desc)
+                                                      .getArgumentTypes().length;
             emitCallWrapper(callInsn, contIndexOnStack);
         }
     }
@@ -143,7 +166,7 @@ public class CodeTransformer extends AnalyzerAdapter {
         // TODO No need to preserve all stack arguments. Store only 'this' pointer, or nothing for invokeStatic.
         // The called function frame will be preserved anyways, so storing its data in this frame is pointless.
         super.visitLabel(start);
-        super.visitFrame(Opcodes.F_NEW, handlerFrame.length, handlerFrame, callStack.length, callStack);
+        super.visitFrame(F_NEW, handlerFrame.length, handlerFrame, callStack.length, callStack);
         visitCallInsn.run();
         super.visitLabel(end);
 
@@ -152,24 +175,27 @@ public class CodeTransformer extends AnalyzerAdapter {
 
     void emitCodeEpilogue() {
         super.visitLabel(ccTableSwitch);
-        super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[] {});
+        super.visitFrame(F_NEW, frame0.length, frame0, 0, new Object[] {});
         if (callWrapInfo.isEmpty()) {
-            super.visitInsn(Opcodes.ACONST_NULL);
-            super.visitVarInsn(Opcodes.ASTORE, contArgIndex);
-            super.visitJumpInsn(Opcodes.GOTO, frame1);
+            super.visitInsn(ACONST_NULL);
+            super.visitVarInsn(ASTORE, contArgIndex);
+            super.visitJumpInsn(GOTO, frame1);
             return;
         }
-        super.visitVarInsn(Opcodes.ALOAD, contArgIndex);
-        super.visitJumpInsn(Opcodes.IFNULL, frame1);
+        super.visitVarInsn(ALOAD, contArgIndex);
+        super.visitJumpInsn(IFNULL, frame1);
 
         Label defaultLabel = new Label();
         Label[] caseLabels = new Label[callWrapInfo.size()];
         Arrays.setAll(caseLabels, (i) -> new Label());
 
-        super.visitVarInsn(Opcodes.ALOAD, contArgIndex);
-        super.visitTypeInsn(Opcodes.CHECKCAST, Context.desc);
-        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, methods.get("popJump").getName(),
-                methods.get("popJump").getDescriptor(), false);
+        super.visitVarInsn(ALOAD, contArgIndex);
+        super.visitTypeInsn(CHECKCAST, Context.desc);
+        super.visitMethodInsn(INVOKEVIRTUAL, Context.desc, methods.get("popJump")
+                                                                  .getName(),
+                methods.get("popJump")
+                       .getDescriptor(),
+                false);
         super.visitTableSwitchInsn(0, caseLabels.length - 1, defaultLabel, caseLabels);
         for (int i = 0; i < caseLabels.length; i++) {
             CallWrapInfo cwi = callWrapInfo.get(i);
@@ -179,47 +205,47 @@ public class CodeTransformer extends AnalyzerAdapter {
 
         super.visitLabel(defaultLabel);
 
-        super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[] {});
-        super.visitVarInsn(Opcodes.ALOAD, contArgIndex);
-        super.visitTypeInsn(Opcodes.CHECKCAST, Context.desc);
-        super.visitTypeInsn(Opcodes.NEW, InvalidContextException.desc);
-        super.visitInsn(Opcodes.DUP_X1);
-        super.visitInsn(Opcodes.SWAP);
-        super.visitMethodInsn(Opcodes.INVOKESPECIAL, InvalidContextException.desc, initInvalidException.getName(),
+        super.visitFrame(F_NEW, frame0.length, frame0, 0, new Object[] {});
+        super.visitVarInsn(ALOAD, contArgIndex);
+        super.visitTypeInsn(CHECKCAST, Context.desc);
+        super.visitTypeInsn(NEW, InvalidContextException.desc);
+        super.visitInsn(DUP_X1);
+        super.visitInsn(SWAP);
+        super.visitMethodInsn(INVOKESPECIAL, InvalidContextException.desc, initInvalidException.getName(),
                 initInvalidException.getDescriptor(), false);
-        super.visitInsn(Opcodes.ATHROW);
+        super.visitInsn(ATHROW);
     }
 
     private void emitSwitchCase(CallWrapInfo cwi, Label caseLabel) {
         super.visitLabel(caseLabel);
-        super.visitFrame(Opcodes.F_NEW, frame0.length, frame0, 0, new Object[] {});
+        super.visitFrame(F_NEW, frame0.length, frame0, 0, new Object[] {});
 
         Object[] stackVars = cwi.getStack();
         Object[] localVars = cwi.getLocals();
 
         // Copy cont reference as contArg is set null during restoration.
         int contCopy = localVars.length + stackVars.length;
-        super.visitVarInsn(Opcodes.ALOAD, contArgIndex);
-        super.visitTypeInsn(Opcodes.CHECKCAST, Context.desc);
-        super.visitVarInsn(Opcodes.ASTORE, contCopy);
+        super.visitVarInsn(ALOAD, contArgIndex);
+        super.visitTypeInsn(CHECKCAST, Context.desc);
+        super.visitVarInsn(ASTORE, contCopy);
         for (int j = 0; j < stackVars.length; ++j) {
             Object t = stackVars[j];
             if (Opcodes.TOP.equals(t)) {
                 continue;
             }
             Method pop = popMethod(t);
-            super.visitVarInsn(Opcodes.ALOAD, contCopy);
-            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, pop.getName(), pop.getDescriptor(), false);
+            super.visitVarInsn(ALOAD, contCopy);
+            super.visitMethodInsn(INVOKEVIRTUAL, Context.desc, pop.getName(), pop.getDescriptor(), false);
             if (j == cwi.getContIndexOnStack()) {
-                super.visitInsn(Opcodes.POP);
-                super.visitVarInsn(Opcodes.ALOAD, contCopy);
-                super.visitInsn(Opcodes.ACONST_NULL);
-                super.visitVarInsn(Opcodes.ASTORE, localVars.length + j);
+                super.visitInsn(POP);
+                super.visitVarInsn(ALOAD, contCopy);
+                super.visitInsn(ACONST_NULL);
+                super.visitVarInsn(ASTORE, localVars.length + j);
             } else {
                 if (t instanceof String) {
-                    super.visitTypeInsn(Opcodes.CHECKCAST, (String) t);
+                    super.visitTypeInsn(CHECKCAST, (String) t);
                 }
-                super.visitInsn(Opcodes.DUP);
+                super.visitInsn(DUP);
                 super.visitVarInsn(storeOpcode(t), localVars.length + j);
             }
         }
@@ -229,18 +255,18 @@ public class CodeTransformer extends AnalyzerAdapter {
                 continue;
             }
             Method pop = popMethod(t);
-            super.visitVarInsn(Opcodes.ALOAD, contCopy);
-            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, pop.getName(), pop.getDescriptor(), false);
+            super.visitVarInsn(ALOAD, contCopy);
+            super.visitMethodInsn(INVOKEVIRTUAL, Context.desc, pop.getName(), pop.getDescriptor(), false);
             if (t instanceof String) {
-                super.visitTypeInsn(Opcodes.CHECKCAST, (String) t);
+                super.visitTypeInsn(CHECKCAST, (String) t);
             }
             super.visitVarInsn(storeOpcode(t), j);
         }
         // Set current cont arg as null to avoid capturing it in next continuation.
-        super.visitInsn(Opcodes.ACONST_NULL);
-        super.visitVarInsn(Opcodes.ASTORE, contArgIndex);
+        super.visitInsn(ACONST_NULL);
+        super.visitVarInsn(ASTORE, contArgIndex);
 
-        super.visitJumpInsn(Opcodes.GOTO, cwi.getCallStart());
+        super.visitJumpInsn(GOTO, cwi.getCallStart());
     }
 
     private void emitHandler(CallWrapInfo cwi, int jump) {
@@ -248,21 +274,21 @@ public class CodeTransformer extends AnalyzerAdapter {
         Object[] localVars = cwi.getLocals();
 
         super.visitLabel(cwi.getHandler());
-        super.visitFrame(Opcodes.F_NEW, cwi.getHandlerFrame().length, cwi.getHandlerFrame(), 1,
+        super.visitFrame(F_NEW, cwi.getHandlerFrame().length, cwi.getHandlerFrame(), 1,
                 new Object[] { DelimException.desc });
         // Get Cont from exception.
-        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, DelimException.desc, getContext.getName(),
-                getContext.getDescriptor(), false);
+        super.visitMethodInsn(INVOKEVIRTUAL, DelimException.desc, getContext.getName(), getContext.getDescriptor(),
+                false);
         // Order of local vars - Push index 0 last.
         for (int j = localVars.length - 1; j >= 0; --j) {
             Object t = localVars[j];
             if (Opcodes.TOP.equals(t)) {
                 continue;
             }
-            super.visitInsn(Opcodes.DUP);
+            super.visitInsn(DUP);
             super.visitVarInsn(loadOpcode(t), j);
             Method push = pushMethod(t);
-            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, push.getName(), push.getDescriptor(), false);
+            super.visitMethodInsn(INVOKEVIRTUAL, Context.desc, push.getName(), push.getDescriptor(), false);
         }
         // Order of stack - Push end of array into Cont first.
         // Index 0 gets pushed last.
@@ -271,23 +297,26 @@ public class CodeTransformer extends AnalyzerAdapter {
             if (Opcodes.TOP.equals(t)) {
                 continue;
             }
-            super.visitInsn(Opcodes.DUP);
+            super.visitInsn(DUP);
             super.visitVarInsn(loadOpcode(t), localVars.length + j);
             Method push = pushMethod(t);
-            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, push.getName(), push.getDescriptor(), false);
+            super.visitMethodInsn(INVOKEVIRTUAL, Context.desc, push.getName(), push.getDescriptor(), false);
         }
-        super.visitInsn(Opcodes.DUP);
+        super.visitInsn(DUP);
         super.visitLdcInsn(Integer.valueOf(jump));
-        super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Context.desc, methods.get("pushJump").getName(),
-                methods.get("pushJump").getDescriptor(), false);
+        super.visitMethodInsn(INVOKEVIRTUAL, Context.desc, methods.get("pushJump")
+                                                                  .getName(),
+                methods.get("pushJump")
+                       .getDescriptor(),
+                false);
 
         // Create new exception. Cont object is on stack.
-        super.visitTypeInsn(Opcodes.NEW, DelimException.desc);
-        super.visitInsn(Opcodes.DUP_X1);
-        super.visitInsn(Opcodes.SWAP);
-        super.visitMethodInsn(Opcodes.INVOKESPECIAL, DelimException.desc, initException.getName(),
+        super.visitTypeInsn(NEW, DelimException.desc);
+        super.visitInsn(DUP_X1);
+        super.visitInsn(SWAP);
+        super.visitMethodInsn(INVOKESPECIAL, DelimException.desc, initException.getName(),
                 initException.getDescriptor(), false);
-        super.visitInsn(Opcodes.ATHROW);
+        super.visitInsn(ATHROW);
     }
 
     Method popMethod(Object t) {
@@ -328,15 +357,15 @@ public class CodeTransformer extends AnalyzerAdapter {
 
     int storeOpcode(Object t) {
         if (t.equals(Opcodes.INTEGER)) {
-            return Opcodes.ISTORE;
+            return ISTORE;
         } else if (t.equals(Opcodes.FLOAT)) {
-            return Opcodes.FSTORE;
+            return FSTORE;
         } else if (t.equals(Opcodes.LONG)) {
-            return Opcodes.LSTORE;
+            return LSTORE;
         } else if (t.equals(Opcodes.DOUBLE)) {
-            return Opcodes.DSTORE;
+            return DSTORE;
         } else if (t instanceof String) {
-            return Opcodes.ASTORE;
+            return ASTORE;
         } else {
             throw new RuntimeException("Unknown, top or uninitialized type " + t);
         }
@@ -344,32 +373,34 @@ public class CodeTransformer extends AnalyzerAdapter {
 
     int loadOpcode(Object t) {
         if (t.equals(Opcodes.INTEGER)) {
-            return Opcodes.ILOAD;
+            return ILOAD;
         } else if (t.equals(Opcodes.FLOAT)) {
-            return Opcodes.FLOAD;
+            return FLOAD;
         } else if (t.equals(Opcodes.LONG)) {
-            return Opcodes.LLOAD;
+            return LLOAD;
         } else if (t.equals(Opcodes.DOUBLE)) {
-            return Opcodes.DLOAD;
+            return DLOAD;
         } else if (t instanceof String) {
-            return Opcodes.ALOAD;
+            return ALOAD;
         } else {
             throw new RuntimeException("Unknown, top or uninitialized type " + t);
         }
     }
 
     static void initStatic() {
-        if (methodsLoaded.get() == false) {
-            Arrays.stream(Context.class.getDeclaredMethods())
-                    .forEach(m -> methods.put(m.getName(), Method.getMethod(m)));
-            try {
-                getContext = Method.getMethod(DelimException.class.getMethod("getContext"));
-                initException = Method.getMethod(DelimException.class.getConstructor(Context.class));
-                initInvalidException = Method.getMethod(InvalidContextException.class.getConstructor(Context.class));
-            } catch (NoSuchMethodException | SecurityException ex) {
-                throw new RuntimeException(ex);
+        synchronized (methods) {
+            if (methods.isEmpty()) {
+                Arrays.stream(Context.class.getDeclaredMethods())
+                      .forEach(m -> methods.put(m.getName(), Method.getMethod(m)));
+                try {
+                    getContext = Method.getMethod(DelimException.class.getMethod("getContext"));
+                    initException = Method.getMethod(DelimException.class.getConstructor(Context.class));
+                    initInvalidException =
+                            Method.getMethod(InvalidContextException.class.getConstructor(Context.class));
+                } catch (NoSuchMethodException | SecurityException ex) {
+                    throw new RuntimeException(ex);
+                }
             }
-            methodsLoaded.set(true);
         }
     }
 }
