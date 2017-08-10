@@ -1,10 +1,8 @@
 package in.neolog.delim4j;
 
-import static org.objectweb.asm.Opcodes.ACONST_NULL;
 import static org.objectweb.asm.Opcodes.ALOAD;
 import static org.objectweb.asm.Opcodes.ASTORE;
 import static org.objectweb.asm.Opcodes.ATHROW;
-import static org.objectweb.asm.Opcodes.CHECKCAST;
 import static org.objectweb.asm.Opcodes.DLOAD;
 import static org.objectweb.asm.Opcodes.DSTORE;
 import static org.objectweb.asm.Opcodes.DUP;
@@ -12,7 +10,6 @@ import static org.objectweb.asm.Opcodes.DUP_X1;
 import static org.objectweb.asm.Opcodes.FLOAD;
 import static org.objectweb.asm.Opcodes.FSTORE;
 import static org.objectweb.asm.Opcodes.F_NEW;
-import static org.objectweb.asm.Opcodes.GOTO;
 import static org.objectweb.asm.Opcodes.IFNULL;
 import static org.objectweb.asm.Opcodes.ILOAD;
 import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
@@ -21,7 +18,6 @@ import static org.objectweb.asm.Opcodes.ISTORE;
 import static org.objectweb.asm.Opcodes.LLOAD;
 import static org.objectweb.asm.Opcodes.LSTORE;
 import static org.objectweb.asm.Opcodes.NEW;
-import static org.objectweb.asm.Opcodes.POP;
 import static org.objectweb.asm.Opcodes.SWAP;
 
 import java.util.ArrayList;
@@ -38,6 +34,7 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.AnalyzerAdapter;
+import org.objectweb.asm.commons.InstructionAdapter;
 import org.objectweb.asm.commons.Method;
 
 import in.neolog.delim4j.rt.Cc;
@@ -45,11 +42,11 @@ import in.neolog.delim4j.rt.Context;
 import in.neolog.delim4j.rt.DelimException;
 import in.neolog.delim4j.rt.InvalidContextException;
 
-public class CodeTransformer extends AnalyzerAdapter {
+public class CodeTransformer extends InstructionAdapter {
 
     private boolean annotationPresent = false;
 
-    private static final Map<String, Method> methods       = new HashMap<>();
+    private static final Map<String, Method> methods = new HashMap<>();
     private static Method                    getContext;
     private static Method                    initException;
     private static Method                    initInvalidException;
@@ -62,9 +59,13 @@ public class CodeTransformer extends AnalyzerAdapter {
     private final boolean            hasThis;
     private final int                contArgIndex;
 
+    protected AnalyzerAdapter getMv() {
+        return (AnalyzerAdapter) super.mv;
+    }
+
     public CodeTransformer(String owner, int access, String name, String desc, MethodVisitor mv) {
-        super(Opcodes.ASM5, owner, access, name, desc, mv);
-        frame0 = locals.toArray();
+        super(Opcodes.ASM5, new AnalyzerAdapter(owner, access, name, desc, mv));
+        frame0 = getMv().locals.toArray();
         hasThis = ((access & Opcodes.ACC_STATIC) == 0);
         contArgIndex = (hasThis ? 1 : 0);
         initStatic();
@@ -83,8 +84,8 @@ public class CodeTransformer extends AnalyzerAdapter {
     public void visitCode() {
         super.visitCode();
         if (annotationPresent) {
-            super.visitJumpInsn(GOTO, ccTableSwitch);
-            super.visitLabel(frame1);
+            goTo(ccTableSwitch);
+            mark(frame1);
             super.visitFrame(F_NEW, frame0.length, frame0, 0, new Object[] {});
         }
     }
@@ -93,15 +94,15 @@ public class CodeTransformer extends AnalyzerAdapter {
         if (doNotCc(name, desc)) {
             callInsn.run();
         } else {
-            int contIndexOnStack = stack.size() - Type.getMethodType(desc)
-                                                      .getArgumentTypes().length;
+            int contIndexOnStack = getMv().stack.size() - Type.getMethodType(desc)
+                                                              .getArgumentTypes().length;
             emitCallWrapper(callInsn, contIndexOnStack);
         }
     }
 
     @Override
     public void visitInvokeDynamicInsn(String name, String desc, Handle bsm, Object... bsmArgs) {
-        emitCall(name, desc, () -> super.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs));
+        emitCall(name, desc, () -> invokedynamic(name, desc, bsm, bsmArgs));
     }
 
     @Override
@@ -129,15 +130,15 @@ public class CodeTransformer extends AnalyzerAdapter {
             }
             return false;
         };
-        ret = ret || notInited.test(stack);
-        ret = ret || notInited.test(locals);
+        ret = ret || notInited.test(getMv().stack);
+        ret = ret || notInited.test(getMv().locals);
         return ret;
     }
 
     void emitCallWrapper(Runnable visitCallInsn, int contIndexOnStack) {
-        Object[] callLocals = locals.toArray();
+        Object[] callLocals = getMv().locals.toArray();
         // Order of Stack - Last poppable value at index 0 and first poppable value at end of array.
-        Object[] callStack = stack.toArray();
+        Object[] callStack = getMv().stack.toArray();
 
         Object[] handlerFrame = Arrays.copyOf(callLocals, callLocals.length + callStack.length);
         System.arraycopy(callStack, 0, handlerFrame, callLocals.length, callStack.length);
@@ -153,7 +154,7 @@ public class CodeTransformer extends AnalyzerAdapter {
             if (Opcodes.TOP.equals(t)) {
                 continue;
             }
-            super.visitVarInsn(storeOpcode(t), callLocals.length + i);
+            store(callLocals.length + i, stackMapToType(t));
         }
         // PUSHs from local vars in reverse order.
         for (int i = 0; i < callStack.length; ++i) {
@@ -161,63 +162,61 @@ public class CodeTransformer extends AnalyzerAdapter {
             if (Opcodes.TOP.equals(t)) {
                 continue;
             }
-            super.visitVarInsn(loadOpcode(t), callLocals.length + i);
+            load(callLocals.length + i, stackMapToType(t));
         }
         // TODO No need to preserve all stack arguments. Store only 'this' pointer, or nothing for invokeStatic.
         // The called function frame will be preserved anyways, so storing its data in this frame is pointless.
-        super.visitLabel(start);
+        mark(start);
         super.visitFrame(F_NEW, handlerFrame.length, handlerFrame, callStack.length, callStack);
         visitCallInsn.run();
-        super.visitLabel(end);
+        mark(end);
 
         callWrapInfo.add(new CallWrapInfo(start, callStack, callLocals, handler, handlerFrame, contIndexOnStack));
     }
 
     void emitCodeEpilogue() {
-        super.visitLabel(ccTableSwitch);
+        mark(ccTableSwitch);
         super.visitFrame(F_NEW, frame0.length, frame0, 0, new Object[] {});
         if (callWrapInfo.isEmpty()) {
-            super.visitInsn(ACONST_NULL);
-            super.visitVarInsn(ASTORE, contArgIndex);
-            super.visitJumpInsn(GOTO, frame1);
+            aconst(null);
+            store(contArgIndex, stackMapToType(Context.desc));
+            goTo(frame1);
             return;
         }
-        super.visitVarInsn(ALOAD, contArgIndex);
-        super.visitJumpInsn(IFNULL, frame1);
+        load(contArgIndex, stackMapToType(Context.desc));
+        ifnull(frame1);
 
         Label defaultLabel = new Label();
         Label[] caseLabels = new Label[callWrapInfo.size()];
         Arrays.setAll(caseLabels, (i) -> new Label());
 
-        super.visitVarInsn(ALOAD, contArgIndex);
-        super.visitTypeInsn(CHECKCAST, Context.desc);
-        super.visitMethodInsn(INVOKEVIRTUAL, Context.desc, methods.get("popJump")
-                                                                  .getName(),
-                methods.get("popJump")
-                       .getDescriptor(),
-                false);
-        super.visitTableSwitchInsn(0, caseLabels.length - 1, defaultLabel, caseLabels);
+        load(contArgIndex, stackMapToType(Context.desc));
+        checkcast(stackMapToType(Context.desc));
+        Method popJump = methods.get("popJump");
+        invokevirtual(Context.desc, popJump.getName(), popJump.getDescriptor(), false);
+        tableswitch(0, caseLabels.length - 1, defaultLabel, caseLabels);
         for (int i = 0; i < caseLabels.length; i++) {
             CallWrapInfo cwi = callWrapInfo.get(i);
             emitSwitchCase(cwi, caseLabels[i]);
             emitHandler(cwi, i);
         }
 
-        super.visitLabel(defaultLabel);
+        mark(defaultLabel);
 
         super.visitFrame(F_NEW, frame0.length, frame0, 0, new Object[] {});
-        super.visitVarInsn(ALOAD, contArgIndex);
-        super.visitTypeInsn(CHECKCAST, Context.desc);
-        super.visitTypeInsn(NEW, InvalidContextException.desc);
-        super.visitInsn(DUP_X1);
-        super.visitInsn(SWAP);
-        super.visitMethodInsn(INVOKESPECIAL, InvalidContextException.desc, initInvalidException.getName(),
+
+        load(contArgIndex, stackMapToType(Context.desc));
+        checkcast(stackMapToType(Context.desc));
+        anew(stackMapToType(InvalidContextException.desc));
+        dupX1();
+        swap();
+        invokespecial(InvalidContextException.desc, initInvalidException.getName(),
                 initInvalidException.getDescriptor(), false);
-        super.visitInsn(ATHROW);
+        athrow();
     }
 
     private void emitSwitchCase(CallWrapInfo cwi, Label caseLabel) {
-        super.visitLabel(caseLabel);
+        mark(caseLabel);
         super.visitFrame(F_NEW, frame0.length, frame0, 0, new Object[] {});
 
         Object[] stackVars = cwi.getStack();
@@ -225,28 +224,28 @@ public class CodeTransformer extends AnalyzerAdapter {
 
         // Copy cont reference as contArg is set null during restoration.
         int contCopy = localVars.length + stackVars.length;
-        super.visitVarInsn(ALOAD, contArgIndex);
-        super.visitTypeInsn(CHECKCAST, Context.desc);
-        super.visitVarInsn(ASTORE, contCopy);
+        load(contArgIndex, stackMapToType(Context.desc));
+        checkcast(stackMapToType(Context.desc));
+        store(contCopy, stackMapToType(Context.desc));
         for (int j = 0; j < stackVars.length; ++j) {
             Object t = stackVars[j];
             if (Opcodes.TOP.equals(t)) {
                 continue;
             }
             Method pop = popMethod(t);
-            super.visitVarInsn(ALOAD, contCopy);
-            super.visitMethodInsn(INVOKEVIRTUAL, Context.desc, pop.getName(), pop.getDescriptor(), false);
+            load(contCopy, stackMapToType(Context.desc));
+            invokevirtual(Context.desc, pop.getName(), pop.getDescriptor(), false);
             if (j == cwi.getContIndexOnStack()) {
-                super.visitInsn(POP);
-                super.visitVarInsn(ALOAD, contCopy);
-                super.visitInsn(ACONST_NULL);
-                super.visitVarInsn(ASTORE, localVars.length + j);
+                pop();
+                load(contCopy, stackMapToType(Context.desc));
+                aconst(null);
+                store(localVars.length + j, stackMapToType(Context.desc));
             } else {
                 if (t instanceof String) {
-                    super.visitTypeInsn(CHECKCAST, (String) t);
+                    checkcast(stackMapToType(t));
                 }
-                super.visitInsn(DUP);
-                super.visitVarInsn(storeOpcode(t), localVars.length + j);
+                dup();
+                store(localVars.length + j, stackMapToType(t));
             }
         }
         for (int j = 0; j < localVars.length; ++j) {
@@ -255,40 +254,39 @@ public class CodeTransformer extends AnalyzerAdapter {
                 continue;
             }
             Method pop = popMethod(t);
-            super.visitVarInsn(ALOAD, contCopy);
-            super.visitMethodInsn(INVOKEVIRTUAL, Context.desc, pop.getName(), pop.getDescriptor(), false);
+            load(contCopy, stackMapToType(Context.desc));
+            invokevirtual(Context.desc, pop.getName(), pop.getDescriptor(), false);
             if (t instanceof String) {
-                super.visitTypeInsn(CHECKCAST, (String) t);
+                checkcast(stackMapToType(t));
             }
-            super.visitVarInsn(storeOpcode(t), j);
+            store(j, stackMapToType(t));
         }
         // Set current cont arg as null to avoid capturing it in next continuation.
-        super.visitInsn(ACONST_NULL);
-        super.visitVarInsn(ASTORE, contArgIndex);
+        aconst(null);
+        store(contArgIndex, stackMapToType(Context.desc));
 
-        super.visitJumpInsn(GOTO, cwi.getCallStart());
+        goTo(cwi.getCallStart());
     }
 
     private void emitHandler(CallWrapInfo cwi, int jump) {
         Object[] stackVars = cwi.getStack();
         Object[] localVars = cwi.getLocals();
 
-        super.visitLabel(cwi.getHandler());
+        mark(cwi.getHandler());
         super.visitFrame(F_NEW, cwi.getHandlerFrame().length, cwi.getHandlerFrame(), 1,
                 new Object[] { DelimException.desc });
         // Get Cont from exception.
-        super.visitMethodInsn(INVOKEVIRTUAL, DelimException.desc, getContext.getName(), getContext.getDescriptor(),
-                false);
+        invokevirtual(DelimException.desc, getContext.getName(), getContext.getDescriptor(), false);
         // Order of local vars - Push index 0 last.
         for (int j = localVars.length - 1; j >= 0; --j) {
             Object t = localVars[j];
             if (Opcodes.TOP.equals(t)) {
                 continue;
             }
-            super.visitInsn(DUP);
-            super.visitVarInsn(loadOpcode(t), j);
+            dup();
+            load(j, stackMapToType(t));
             Method push = pushMethod(t);
-            super.visitMethodInsn(INVOKEVIRTUAL, Context.desc, push.getName(), push.getDescriptor(), false);
+            invokevirtual(Context.desc, push.getName(), push.getDescriptor(), false);
         }
         // Order of stack - Push end of array into Cont first.
         // Index 0 gets pushed last.
@@ -297,29 +295,25 @@ public class CodeTransformer extends AnalyzerAdapter {
             if (Opcodes.TOP.equals(t)) {
                 continue;
             }
-            super.visitInsn(DUP);
-            super.visitVarInsn(loadOpcode(t), localVars.length + j);
+            dup();
+            load(localVars.length + j, stackMapToType(t));
             Method push = pushMethod(t);
-            super.visitMethodInsn(INVOKEVIRTUAL, Context.desc, push.getName(), push.getDescriptor(), false);
+            invokevirtual(Context.desc, push.getName(), push.getDescriptor(), false);
         }
-        super.visitInsn(DUP);
-        super.visitLdcInsn(Integer.valueOf(jump));
-        super.visitMethodInsn(INVOKEVIRTUAL, Context.desc, methods.get("pushJump")
-                                                                  .getName(),
-                methods.get("pushJump")
-                       .getDescriptor(),
-                false);
+        dup();
+        visitLdcInsn(Integer.valueOf(jump));
+        Method pushJump = methods.get("pushJump");
+        invokevirtual(Context.desc, pushJump.getName(), pushJump.getDescriptor(), false);
 
         // Create new exception. Cont object is on stack.
-        super.visitTypeInsn(NEW, DelimException.desc);
-        super.visitInsn(DUP_X1);
-        super.visitInsn(SWAP);
-        super.visitMethodInsn(INVOKESPECIAL, DelimException.desc, initException.getName(),
-                initException.getDescriptor(), false);
-        super.visitInsn(ATHROW);
+        anew(stackMapToType(DelimException.desc));
+        dupX1();
+        swap();
+        invokespecial(DelimException.desc, initException.getName(), initException.getDescriptor(), false);
+        athrow();
     }
 
-    Method popMethod(Object t) {
+    private Method popMethod(Object t) {
         String name;
         if (t.equals(Opcodes.INTEGER)) {
             name = "popInt";
@@ -337,7 +331,7 @@ public class CodeTransformer extends AnalyzerAdapter {
         return methods.get(name);
     }
 
-    Method pushMethod(Object t) {
+    private Method pushMethod(Object t) {
         String name;
         if (t.equals(Opcodes.INTEGER)) {
             name = "pushInt";
@@ -355,33 +349,28 @@ public class CodeTransformer extends AnalyzerAdapter {
         return methods.get(name);
     }
 
-    int storeOpcode(Object t) {
-        if (t.equals(Opcodes.INTEGER)) {
-            return ISTORE;
-        } else if (t.equals(Opcodes.FLOAT)) {
-            return FSTORE;
-        } else if (t.equals(Opcodes.LONG)) {
-            return LSTORE;
-        } else if (t.equals(Opcodes.DOUBLE)) {
-            return DSTORE;
-        } else if (t instanceof String) {
-            return ASTORE;
-        } else {
-            throw new RuntimeException("Unknown, top or uninitialized type " + t);
-        }
-    }
+    private Map<Object, Type> typeCache = new HashMap<>();
 
-    int loadOpcode(Object t) {
+    private Type stackMapToType(Object t) {
+        Type cached = typeCache.get(t);
+        if (cached != null) {
+            return cached;
+        }
         if (t.equals(Opcodes.INTEGER)) {
-            return ILOAD;
+            typeCache.put(Opcodes.INTEGER, Type.INT_TYPE);
+            return Type.INT_TYPE;
         } else if (t.equals(Opcodes.FLOAT)) {
-            return FLOAD;
+            typeCache.put(Opcodes.FLOAT, Type.FLOAT_TYPE);
+            return Type.FLOAT_TYPE;
         } else if (t.equals(Opcodes.LONG)) {
-            return LLOAD;
+            typeCache.put(Opcodes.LONG, Type.LONG_TYPE);
+            return Type.LONG_TYPE;
         } else if (t.equals(Opcodes.DOUBLE)) {
-            return DLOAD;
+            typeCache.put(Opcodes.DOUBLE, Type.DOUBLE_TYPE);
+            return Type.DOUBLE_TYPE;
         } else if (t instanceof String) {
-            return ALOAD;
+            typeCache.put(t, Type.getObjectType(t.toString()));
+            return typeCache.get(t);
         } else {
             throw new RuntimeException("Unknown, top or uninitialized type " + t);
         }
