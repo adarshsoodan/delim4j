@@ -26,8 +26,6 @@ import in.neolog.delim4j.rt.InvalidContextException;
 
 public class CodeTransformer extends InstructionAdapter {
 
-    private boolean annotationPresent = false;
-
     private static final Map<String, Method> methods = new HashMap<>();
     private static Method                    getContext;
     private static Method                    initException;
@@ -38,8 +36,12 @@ public class CodeTransformer extends InstructionAdapter {
     private final Label    ccTableSwitch = new Label();
 
     private final List<CallWrapInfo> callWrapInfo = new ArrayList<>();
-    private final boolean            hasThis;
-    private final int                contArgIndex;
+
+    /**
+     * Position of first argument marked @Cc. -1 implies absence of @Cc on any argument
+     */
+    private int           contArgIndex = -1;
+    private final boolean hasThis;
 
     protected AnalyzerAdapter getMv() {
         return (AnalyzerAdapter) super.mv;
@@ -49,14 +51,15 @@ public class CodeTransformer extends InstructionAdapter {
         super(Opcodes.ASM5, new AnalyzerAdapter(owner, access, name, desc, mv));
         frame0 = getMv().locals.toArray();
         hasThis = ((access & Opcodes.ACC_STATIC) == 0);
-        contArgIndex = (hasThis ? 1 : 0);
         initStatic();
     }
 
     @Override
     public AnnotationVisitor visitParameterAnnotation(int parameter, String desc, boolean visible) {
-        if (parameter == 0 && Cc.annotationDesc.equals(desc)) {
-            annotationPresent = true;
+        if (Cc.annotationDesc.equals(desc)) {
+            if (contArgIndex == -1) {
+                contArgIndex = parameter + (hasThis ? 1 : 0);
+            }
             return null; // Removes the @Cc annotation.
         }
         return super.visitParameterAnnotation(parameter, desc, visible);
@@ -65,20 +68,10 @@ public class CodeTransformer extends InstructionAdapter {
     @Override
     public void visitCode() {
         super.visitCode();
-        if (annotationPresent) {
+        if (contArgIndex != -1) {
             goTo(ccTableSwitch);
             mark(frame1);
             super.visitFrame(F_NEW, frame0.length, frame0, 0, new Object[] {});
-        }
-    }
-
-    private void emitCall(String name, String desc, Runnable callInsn) {
-        if (doNotCc(name, desc)) {
-            callInsn.run();
-        } else {
-            int contIndexOnStack = getMv().stack.size() - Type.getMethodType(desc)
-                                                              .getArgumentTypes().length;
-            emitCallWrapper(callInsn, contIndexOnStack);
         }
     }
 
@@ -92,16 +85,30 @@ public class CodeTransformer extends InstructionAdapter {
         emitCall(name, desc, () -> super.visitMethodInsn(opcode, owner, name, desc, itf));
     }
 
+    private void emitCall(String name, String desc, Runnable callInsn) {
+        if (doNotWrap(name, desc)) {
+            callInsn.run();
+        } else {
+            int contIndexOnStack = getMv().stack.size() - Type.getMethodType(desc)
+                                                              .getArgumentTypes().length;
+            emitCallWrapper(callInsn, contIndexOnStack);
+        }
+    }
+
     @Override
     public void visitMaxs(int maxStack, int maxLocals) {
-        if (annotationPresent) {
+        if (contArgIndex != -1) {
             emitCodeEpilogue();
         }
         super.visitMaxs(maxStack, maxLocals);
     }
 
-    boolean doNotCc(String name, String desc) {
-        boolean ret = !annotationPresent;
+    // FIXME Method.invoke() and MethodHandle.invoke*() reflective access returns true as of now.
+    /**
+     * This is an optimization. Any call can be wrapped, but it is better to avoid it.
+     */
+    boolean doNotWrap(String name, String desc) {
+        boolean ret = contArgIndex == -1;
         ret = ret || !(desc.startsWith(Context.argDesc) || desc.startsWith("(Ljava/lang/Object;"));
         ret = ret || "<init>".equals(name) || "<clinit>".equals(name);
         Predicate<List<?>> notInited = l -> {
@@ -168,9 +175,9 @@ public class CodeTransformer extends InstructionAdapter {
         load(contArgIndex, stackMapToType(Context.desc));
         ifnull(frame1);
 
-        Label defaultLabel = new Label();
         Label[] caseLabels = new Label[callWrapInfo.size()];
         Arrays.setAll(caseLabels, (i) -> new Label());
+        Label defaultLabel = new Label();
 
         load(contArgIndex, stackMapToType(Context.desc));
         checkcast(stackMapToType(Context.desc));
@@ -209,39 +216,51 @@ public class CodeTransformer extends InstructionAdapter {
         load(contArgIndex, stackMapToType(Context.desc));
         checkcast(stackMapToType(Context.desc));
         store(contCopy, stackMapToType(Context.desc));
-        for (int j = 0; j < stackVars.length; ++j) {
-            Object t = stackVars[j];
+        for (int i = 0; i < stackVars.length; ++i) {
+            Object t = stackVars[i];
             if (Opcodes.TOP.equals(t)) {
                 continue;
             }
             Method pop = popMethod(t);
-            load(contCopy, stackMapToType(Context.desc));
-            invokevirtual(Context.desc, pop.getName(), pop.getDescriptor(), false);
-            if (j == cwi.getContIndexOnStack()) {
+            if (i == cwi.getContIndexOnStack() && (Context.desc.equals(t) || Context.objectDesc.equals(t))) {
+                load(contCopy, stackMapToType(Context.desc));
+                invokevirtual(Context.desc, pop.getName(), pop.getDescriptor(), false);
                 pop();
                 load(contCopy, stackMapToType(Context.desc));
                 aconst(null);
-                store(localVars.length + j, stackMapToType(Context.desc));
+                store(localVars.length + i, stackMapToType(Context.desc));
             } else {
                 if (t instanceof String) {
+                    load(contCopy, stackMapToType(Context.desc));
+                    invokevirtual(Context.desc, pop.getName(), pop.getDescriptor(), false);
                     checkcast(stackMapToType(t));
+                } else if (Opcodes.NULL.equals(t)) {
+                    aconst(null);
+                } else {
+                    load(contCopy, stackMapToType(Context.desc));
+                    invokevirtual(Context.desc, pop.getName(), pop.getDescriptor(), false);
                 }
                 dup();
-                store(localVars.length + j, stackMapToType(t));
+                store(localVars.length + i, stackMapToType(t));
             }
         }
-        for (int j = 0; j < localVars.length; ++j) {
-            Object t = localVars[j];
+        for (int i = 0; i < localVars.length; ++i) {
+            Object t = localVars[i];
             if (Opcodes.TOP.equals(t)) {
                 continue;
             }
             Method pop = popMethod(t);
-            load(contCopy, stackMapToType(Context.desc));
-            invokevirtual(Context.desc, pop.getName(), pop.getDescriptor(), false);
             if (t instanceof String) {
+                load(contCopy, stackMapToType(Context.desc));
+                invokevirtual(Context.desc, pop.getName(), pop.getDescriptor(), false);
                 checkcast(stackMapToType(t));
+            } else if (Opcodes.NULL.equals(t)) {
+                aconst(null);
+            } else {
+                load(contCopy, stackMapToType(Context.desc));
+                invokevirtual(Context.desc, pop.getName(), pop.getDescriptor(), false);
             }
-            store(j, stackMapToType(t));
+            store(i, stackMapToType(t));
         }
         // Set current cont arg as null to avoid capturing it in next continuation.
         aconst(null);
@@ -260,25 +279,25 @@ public class CodeTransformer extends InstructionAdapter {
         // Get Cont from exception.
         invokevirtual(DelimException.desc, getContext.getName(), getContext.getDescriptor(), false);
         // Order of local vars - Push index 0 last.
-        for (int j = localVars.length - 1; j >= 0; --j) {
-            Object t = localVars[j];
-            if (Opcodes.TOP.equals(t)) {
+        for (int i = localVars.length - 1; i >= 0; --i) {
+            Object t = localVars[i];
+            if (Opcodes.TOP.equals(t) || Opcodes.NULL.equals(t)) {
                 continue;
             }
             dup();
-            load(j, stackMapToType(t));
+            load(i, stackMapToType(t));
             Method push = pushMethod(t);
             invokevirtual(Context.desc, push.getName(), push.getDescriptor(), false);
         }
         // Order of stack - Push end of array into Cont first.
         // Index 0 gets pushed last.
-        for (int j = stackVars.length - 1; j >= 0; --j) {
-            Object t = stackVars[j];
-            if (Opcodes.TOP.equals(t)) {
+        for (int i = stackVars.length - 1; i >= 0; --i) {
+            Object t = stackVars[i];
+            if (Opcodes.TOP.equals(t) || Opcodes.NULL.equals(t)) {
                 continue;
             }
             dup();
-            load(localVars.length + j, stackMapToType(t));
+            load(localVars.length + i, stackMapToType(t));
             Method push = pushMethod(t);
             invokevirtual(Context.desc, push.getName(), push.getDescriptor(), false);
         }
@@ -305,7 +324,7 @@ public class CodeTransformer extends InstructionAdapter {
             name = "popLong";
         } else if (t.equals(Opcodes.DOUBLE)) {
             name = "popDouble";
-        } else if (t instanceof String) {
+        } else if (t.equals(Opcodes.NULL) || t instanceof String) {
             name = "popObject";
         } else {
             throw new RuntimeException("Unknown, top or uninitialized type " + t);
@@ -323,7 +342,7 @@ public class CodeTransformer extends InstructionAdapter {
             name = "pushLong";
         } else if (t.equals(Opcodes.DOUBLE)) {
             name = "pushDouble";
-        } else if (t instanceof String) {
+        } else if (t.equals(Opcodes.NULL) || t instanceof String) {
             name = "pushObject";
         } else {
             throw new RuntimeException("Unknown, top or uninitialized type " + t);
@@ -350,6 +369,9 @@ public class CodeTransformer extends InstructionAdapter {
         } else if (t.equals(Opcodes.DOUBLE)) {
             typeCache.put(Opcodes.DOUBLE, Type.DOUBLE_TYPE);
             return Type.DOUBLE_TYPE;
+        } else if (t.equals(Opcodes.NULL)) {
+            typeCache.put(Opcodes.NULL, Type.getType("java/lang/Object"));
+            return typeCache.get(t);
         } else if (t instanceof String) {
             typeCache.put(t, Type.getObjectType(t.toString()));
             return typeCache.get(t);
@@ -361,13 +383,14 @@ public class CodeTransformer extends InstructionAdapter {
     static void initStatic() {
         synchronized (methods) {
             if (methods.isEmpty()) {
-                Arrays.stream(Context.class.getDeclaredMethods())
-                      .forEach(m -> methods.put(m.getName(), Method.getMethod(m)));
+                for (java.lang.reflect.Method m : Context.class.getDeclaredMethods()) {
+                    methods.put(m.getName(), Method.getMethod(m));
+                }
                 try {
                     getContext = Method.getMethod(DelimException.class.getMethod("getContext"));
                     initException = Method.getMethod(DelimException.class.getConstructor(Context.class));
                     initInvalidException =
-                            Method.getMethod(InvalidContextException.class.getConstructor(Context.class));
+                                         Method.getMethod(InvalidContextException.class.getConstructor(Context.class));
                 } catch (NoSuchMethodException | SecurityException ex) {
                     throw new RuntimeException(ex);
                 }

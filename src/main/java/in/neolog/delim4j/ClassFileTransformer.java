@@ -11,7 +11,7 @@ import org.objectweb.asm.ClassWriter;
 public class ClassFileTransformer implements java.lang.instrument.ClassFileTransformer {
 
     public static void premain(String agentArgs, Instrumentation inst) {
-        inst.addTransformer(new ClassFileTransformer(), true);
+        inst.addTransformer(new ClassFileTransformer(), false);
     }
 
     @Override

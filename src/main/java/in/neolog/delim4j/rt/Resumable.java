@@ -2,19 +2,20 @@ package in.neolog.delim4j.rt;
 
 import java.util.function.Function;
 
-public class Resumable {
+public class Resumable<T, S> {
 
-    private final Context                   context;
-    private final Function<Context, Object> frames;
+    private final Context<T, S>              context;
+    private final Function<Context<T, S>, T> frames;
 
-    public Object resume(Object o) {
-        Context cloned = context.clone();
+    //TODO Should this have @Cc Context as first argument?
+    public T resume(S o) {
+        Context<T, S> cloned = context.clone();
         cloned.setSubstitution(o);
         cloned.startResumption();
         return frames.apply(cloned);
     }
 
-    public Resumable(Context context, Function<Context, Object> frames) {
+    public Resumable(Context<T, S> context, Function<Context<T, S>, T> frames) {
         this.context = context;
         this.frames = frames;
     }

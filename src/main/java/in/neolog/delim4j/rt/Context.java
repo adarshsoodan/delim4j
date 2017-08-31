@@ -3,35 +3,57 @@ package in.neolog.delim4j.rt;
 import java.io.Serializable;
 import java.lang.ref.SoftReference;
 import java.util.Arrays;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
-public final class Context implements Cloneable, Serializable {
+public final class Context<T, S> implements Cloneable, Serializable {
 
     public static final long   serialVersionUID = 1;
     public static final String desc             = Context.class.getName()
                                                                .replace('.', '/');
+    public static final String objectDesc       = Object.class.getName()
+                                                              .replace('.', '/');
     public static final String argDesc          = "(L" + desc + ";";
 
     public enum State {
         Capturing, Captured, Cloned, Resuming
     };
 
-    public static Object start(Function<Context, Object> frames) {
-        try {
-            return frames.apply(null);
-        } catch (DelimException e) {
-            Context context = e.getContext();
-            context.finishCapture();
-            Resumable resumable = new Resumable(context, frames);
-            Function<Resumable, Object> receiver = context.receiver;
-            return receiver.apply(resumable);
+    @SuppressWarnings({ "unchecked" })
+    public static <T, S> T start(Context<T, S> cc, Function<Context<T, S>, T> frames) {
+        if (cc == null) {
+            try {
+                return frames.apply(null);
+            } catch (DelimException e) {
+                Context<T, S> context = e.getContext();
+                context.finishCapture();
+                Resumable<T, S> resumable = new Resumable<>(context, frames);
+                BiFunction<Context<T, S>, Resumable<T, S>, T> shift = context.shift;
+                try {
+                    return shift.apply(null, resumable);
+                } catch (DelimException ee) {
+                    Context<T, S> otherCc = ee.getContext();
+                    otherCc.pushObject(shift);
+                    throw ee;
+                }
+            }
+        } else {
+            BiFunction<Context<T, S>, Resumable<T, S>, T> shift =
+                                                                (BiFunction<Context<T, S>, Resumable<T, S>, T>) cc.popObject();
+            try {
+                return shift.apply(cc, null);
+            } catch (DelimException ee) {
+                Context<T, S> otherCc = ee.getContext();
+                otherCc.pushObject(shift);
+                throw ee;
+            }
         }
     }
 
-    public static Object capture(Context context, Function<Resumable, Object> receiver) {
+    public static <T, S> S capture(Context<T, S> context, BiFunction<Context<T, S>, Resumable<T, S>, T> shift) {
         if (context == null) {
             // Start - capture the stack
-            throw new DelimException(new Context(receiver));
+            throw new DelimException(new Context<T, S>(shift));
         }
         // Finish - resume the stack if context is Resuming
         if (context.getState() == State.Resuming) {
@@ -40,10 +62,12 @@ public final class Context implements Cloneable, Serializable {
         throw new RuntimeException("Context is not in state Resuming.\n Current State = " + context.getState());
     }
 
-    private final transient Function<Resumable, Object> receiver;
-    private Object                                      substitution;
-    private State                                       state;
-    private final SoftReference<Context>                clonedFrom;
+    private final transient SoftReference<Context<T, S>> clonedFrom;
+
+    private final transient BiFunction<Context<T, S>, Resumable<T, S>, T> shift;
+
+    private S     substitution;
+    private State state;
 
     private static final int increment = 8;
 
@@ -61,8 +85,8 @@ public final class Context implements Cloneable, Serializable {
     private int posDouble;
     private int posObject;
 
-    public Context(Function<Resumable, Object> receiver) {
-        this.receiver = receiver;
+    public Context(BiFunction<Context<T, S>, Resumable<T, S>, T> shift) {
+        this.shift = shift;
         state = State.Capturing;
         clonedFrom = null;
         posJump = posInt = posFloat = posLong = posDouble = posObject = 0;
@@ -74,7 +98,7 @@ public final class Context implements Cloneable, Serializable {
         objects = null;
     }
 
-    public Context getClonedFrom() {
+    public Context<T, S> getClonedFrom() {
         return clonedFrom.get();
     }
 
@@ -82,18 +106,19 @@ public final class Context implements Cloneable, Serializable {
         return state;
     }
 
+    // TODO trim array sizes to minimum possible size
     public void finishCapture() {
         if (getState() == State.Captured) {
             return;
         }
         if (posJump <= 0) {
             throw new IllegalStateException(
-                    "Cannot mark a Context as Captured, which has an empty jump table." + "\n posJump = " + posJump);
+                    "Cannot mark a Context as Captured, which has an empty jump table. Perhaps byte code is not instrumented?.\n posJump = " + posJump);
         }
         if (getState() != State.Capturing) {
             throw new IllegalStateException(
                     "Cannot mark a Context as Captured which is not in state Capturing.\n Current State = "
-                            + getState());
+                                            + getState());
         }
         state = State.Captured;
     }
@@ -108,11 +133,11 @@ public final class Context implements Cloneable, Serializable {
         }
     }
 
-    public Object getSubstitution() {
+    public S getSubstitution() {
         return substitution;
     }
 
-    public void setSubstitution(Object substitution) {
+    public void setSubstitution(S substitution) {
         this.substitution = substitution;
     }
 
@@ -196,31 +221,36 @@ public final class Context implements Cloneable, Serializable {
         return objects[posObject];
     }
 
-    public void pushObject(final Object o) {
+    public void pushObject(final Object obj) {
         if (objects == null) {
             objects = new Object[increment];
         } else if (posObject == objects.length) {
             objects = Arrays.copyOf(objects, objects.length + increment);
         }
-        objects[posObject] = o;
+        if (obj instanceof Context) {
+            objects[posObject] = null;
+        } else {
+            objects[posObject] = obj;
+        }
         ++posObject;
     }
 
     @Override
-    public Context clone() {
+    public Context<T, S> clone() {
         if (getState() != State.Captured) {
             throw new IllegalStateException(
                     "Cannot clone a Context which is not in state Captured.\n Current State = " + getState());
         }
-        Context ret = new Context(receiver, substitution, State.Cloned, new SoftReference<Context>(this), jumps, ints,
-                floats, longs, doubles, objects, posJump, posInt, posFloat, posLong, posDouble, posObject);
+        Context<T, S> ret = new Context<T, S>(shift, substitution, State.Cloned, new SoftReference<Context<T, S>>(this),
+                jumps, ints, floats, longs, doubles, objects, posJump, posInt, posFloat, posLong, posDouble, posObject);
         return ret;
     }
 
-    private Context(Function<Resumable, Object> receiver, Object substitution, State state,
-            SoftReference<Context> clonedFrom, int[] jumps, int[] ints, float[] floats, long[] longs, double[] doubles,
-            Object[] objects, int posJump, int posInt, int posFloat, int posLong, int posDouble, int posObject) {
-        this.receiver = receiver;
+    private Context(BiFunction<Context<T, S>, Resumable<T, S>, T> shift, S substitution, State state,
+            SoftReference<Context<T, S>> clonedFrom, int[] jumps, int[] ints, float[] floats, long[] longs,
+            double[] doubles, Object[] objects, int posJump, int posInt, int posFloat, int posLong, int posDouble,
+            int posObject) {
+        this.shift = shift;
         this.substitution = substitution;
         this.state = state;
         this.clonedFrom = clonedFrom;

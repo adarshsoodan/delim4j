@@ -22,9 +22,9 @@ public class ContextClassVisitor extends ClassVisitor {
 
     @Override
     public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
-        // TODO skip (access & ACC_NATIVE) methods
-        // TODO error out on synchronised methods
-        if ("<init>".equals(name) || "<clinit>".equals(name) || !desc.startsWith(Context.argDesc)) {
+        // TODO perhaps error out on synchronised methods
+        if (access == Opcodes.ACC_NATIVE || "<init>".equals(name) || "<clinit>".equals(name)
+            || !desc.contains(Context.desc)) {
             return super.visitMethod(access, name, desc, signature, exceptions);
         }
         return new CodeTransformer(this.className, access, name, desc,
