@@ -28,7 +28,7 @@ public class ChangerTest {
 
     }
 
-    //@Test
+    @Test
     public void printChangedCode() {
         String className = DelimCCTest.class.getCanonicalName();
         ClassReader reader;

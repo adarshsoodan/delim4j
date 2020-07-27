@@ -16,10 +16,10 @@ public class DummyClass
     public String middle1(@Cc Context<String, String> cont, Function<Context<String, String>, String> action) {
         return action.apply(cont);
     }
-
+    
     @Override
     public String apply(@Cc Context<String, String> cont, Function<Context<String, String>, String> action) {
         return entry1(cont, action);
     }
-
+    
 }

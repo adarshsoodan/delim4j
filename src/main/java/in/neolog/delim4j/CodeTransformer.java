@@ -370,7 +370,7 @@ public class CodeTransformer extends InstructionAdapter {
             typeCache.put(Opcodes.DOUBLE, Type.DOUBLE_TYPE);
             return Type.DOUBLE_TYPE;
         } else if (t.equals(Opcodes.NULL)) {
-            typeCache.put(Opcodes.NULL, Type.getType("java/lang/Object"));
+            typeCache.put(Opcodes.NULL, Type.getType("Ljava/lang/Object;"));
             return typeCache.get(t);
         } else if (t instanceof String) {
             typeCache.put(t, Type.getObjectType(t.toString()));
