@@ -17,15 +17,15 @@ public class DelimCCTest {
     @SuppressWarnings("boxing")
     @Test
     public void test1() {
-        assertEquals(Context.<Integer, Integer>start(null, (@Cc Context<Integer, Integer> cc) -> 1),
+        assertEquals(Context.start(null, (@Cc Context<Integer, Integer> cc) -> 1),
                 Integer.valueOf(1));
     }
 
     @SuppressWarnings("boxing")
     @Test
     public void test2() {
-        assertEquals(Context.<Integer, Integer>start(null,
-                (@Cc Context<Integer, Integer> cc) -> Context.<Integer, Integer>start(null,
+        assertEquals(Context.start(null,
+                (@Cc Context<Integer, Integer> cc) -> Context.start(null,
                         (@Cc Context<Integer, Integer> cc1) -> 5)),
                 Integer.valueOf(5));
     }
@@ -34,7 +34,7 @@ public class DelimCCTest {
     @Test
     public void test3() {
         assertEquals(
-                Context.<Integer, Integer>start(null,
+                Context.start(null,
                         (@Cc Context<Integer, Integer> cc) -> Context.capture(cc, (cc1, resume) -> 5) + 6),
                 Integer.valueOf(5));
     }
@@ -43,8 +43,8 @@ public class DelimCCTest {
     @Test
     public void test3_1() {
         assertEquals(
-                Context.<Integer, Integer>start(null,
-                        (@Cc Context<Integer, Integer> cc) -> Context.<Integer, Integer>start(null,
+                Context.start(null,
+                        (@Cc Context<Integer, Integer> cc) -> Context.start(null,
                                 (@Cc Context<Integer, Integer> cc1) -> Context.capture(cc1, (cc3, resume) -> 5) + 6)),
                 Integer.valueOf(5));
     }
@@ -52,8 +52,8 @@ public class DelimCCTest {
     @SuppressWarnings("boxing")
     @Test
     public void test3_2() {
-        assertEquals(Context.<Integer, Integer>start(null, (@Cc Context<Integer, Integer> cc) -> {
-            int v = Context.<Integer, Integer>start(null,
+        assertEquals(Context.start(null, (@Cc Context<Integer, Integer> cc) -> {
+            int v = Context.start(null,
                     (@Cc Context<Integer, Integer> cc1) -> Context.capture(cc1, (cc3, resume) -> 5) + 6);
             int v1 = Context.capture(cc, (cc4, resume) -> 7);
             return v + v1 + 10;
@@ -63,8 +63,8 @@ public class DelimCCTest {
     @SuppressWarnings("boxing")
     @Test
     public void test4() {
-        assertEquals(Context.<Integer, Integer>start(null, (@Cc Context<Integer, Integer> cc) -> {
-            int v = Context.capture(cc, (cc1, resume) -> Context.<Integer, Integer>start(null,
+        assertEquals(Context.start(null, (@Cc Context<Integer, Integer> cc) -> {
+            int v = Context.capture(cc, (cc1, resume) -> Context.start(null,
                     (@Cc Context<Integer, Integer> cc2) -> resume.resume(5)));
             return v + 10;
         }), Integer.valueOf(15));
@@ -74,7 +74,7 @@ public class DelimCCTest {
     @Test
     public void test5() {
         assertEquals(
-                10 + Context.<Integer, Integer>start(null, (@Cc Context<Integer, Integer> cc) -> 2 + Context.capture(cc,
+                10 + Context.start(null, (@Cc Context<Integer, Integer> cc) -> 2 + Context.capture(cc,
                         (cc1, resume) -> 100 + resume.resume(resume.resume(3)))),
                 117);
     }
@@ -82,7 +82,7 @@ public class DelimCCTest {
     @SuppressWarnings("boxing")
     @Test
     public void test5_1() {
-        assertEquals(10 + Context.<Integer, Integer>start(null,
+        assertEquals(10 + Context.start(null,
                 (@Cc Context<Integer, Integer> cc) -> 2 + Context.capture(cc, (cc1, resume) -> 100 + resume.resume(3))),
                 115);
     }
@@ -91,9 +91,9 @@ public class DelimCCTest {
     @Test
     public void test5_2() {
         assertEquals(
-                10 + Context.<Integer, Integer>start(null, (@Cc Context<Integer, Integer> cc) -> 2 + Context.capture(cc,
+                10 + Context.start(null, (@Cc Context<Integer, Integer> cc) -> 2 + Context.capture(cc,
                         (@Cc Context<Integer, Integer> cc1, Resumable<Integer, Integer> resume) -> {
-                            int v = Context.<Integer, Integer>start(null, (@Cc Context<Integer, Integer> cc2) -> {
+                            int v = Context.start(null, (@Cc Context<Integer, Integer> cc2) -> {
                                 int v1 = Context.capture(cc2,
                                         (@Cc Context<Integer, Integer> cc3, Resumable<Integer, Integer> resume1) -> 3);
                                 return 9 + resume.resume(v1);
@@ -135,7 +135,7 @@ public class DelimCCTest {
 
         BiFunction<Context<Integer, Supplier<Integer>>, Resumable<Integer, Supplier<Integer>>, Integer> shift = (
                 @Cc Context<Integer, Supplier<Integer>> cc, Resumable<Integer, Supplier<Integer>> resume) -> {
-            Supplier<Integer> x = () -> Context.<Integer, Integer>start(null, frame1.apply(resume));
+            Supplier<Integer> x = () -> Context.start(null, frame1.apply(resume));
             return 100 + resume.resume(x);
         };
 
@@ -175,7 +175,7 @@ public class DelimCCTest {
 
         BiFunction<Context<Integer, Supplier<Integer>>, Resumable<Integer, Supplier<Integer>>, Integer> shift = (
                 @Cc Context<Integer, Supplier<Integer>> cc, Resumable<Integer, Supplier<Integer>> resume) -> {
-            Supplier<Integer> x = () -> Context.<Integer, Integer>start(null, frame1.apply(resume));
+            Supplier<Integer> x = () -> Context.start(null, frame1.apply(resume));
             return 100 + resume.resume(x);
         };
 

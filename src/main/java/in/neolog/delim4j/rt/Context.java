@@ -112,8 +112,8 @@ public final class Context<T, S> implements Cloneable, Serializable {
             return;
         }
         if (posJump <= 0) {
-            throw new IllegalStateException(
-                    "Cannot mark a Context as Captured, which has an empty jump table. Perhaps byte code is not instrumented?.\n posJump = " + posJump);
+            throw new IllegalStateException("Cannot mark a Context as Captured, which has an empty jump table."
+                                            + " Perhaps byte code is not instrumented?.\n posJump = " + posJump);
         }
         if (getState() != State.Capturing) {
             throw new IllegalStateException(
