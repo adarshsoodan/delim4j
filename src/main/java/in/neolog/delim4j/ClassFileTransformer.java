@@ -1,3 +1,7 @@
+/*
+ * Copyright Adarsh Soodan, 2016
+ * Licensed under http://www.apache.org/licenses/LICENSE-2.0
+ */
 package in.neolog.delim4j;
 
 import java.lang.instrument.IllegalClassFormatException;

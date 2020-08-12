@@ -1,3 +1,7 @@
+/*
+ * Copyright Adarsh Soodan, 2016
+ * Licensed under http://www.apache.org/licenses/LICENSE-2.0
+ */
 package org.decon.test;
 
 import java.io.IOException;

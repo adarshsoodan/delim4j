@@ -1,3 +1,7 @@
+/*
+ * Copyright Adarsh Soodan, 2016
+ * Licensed under http://www.apache.org/licenses/LICENSE-2.0
+ */
 package org.decon.util;
 
 import java.util.function.BiFunction;
